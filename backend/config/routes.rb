@@ -7,4 +7,7 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   # root "posts#index"
+
+  post '/shorten', to: 'short_urls#create'
+  get '/:short_code', to: 'short_urls#redirect'
 end
