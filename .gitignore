@@ -1,50 +1,57 @@
 ############################################
-# Ruby / Rails
+# Ruby / Rails (backend)
 ############################################
 
-.bundle
-/log/*
-/tmp/*
-!/log/.keep
-!/tmp/.keep
+backend/.bundle
+backend/log/*
+!backend/log/.keep
 
-/tmp/pids/*
-!/tmp/pids/
-!/tmp/pids/.keep
+backend/tmp/*
+!backend/tmp/.keep
 
-/storage/*
-!/storage/.keep
-/tmp/storage/*
-!/tmp/storage/
-!/tmp/storage/.keep
+backend/tmp/cache/*
+!backend/tmp/cache/.keep
 
-/config/*.key
+backend/tmp/pids/*
+!backend/tmp/pids/.keep
 
-# Rails environment files
-.env*
+backend/storage/*
+!backend/storage/.keep
+
+backend/tmp/storage/*
+!backend/tmp/storage/.keep
+
+backend/config/*.key
+
+############################################
+# Environment variables
+############################################
+
+.env
+.env.*
 !.env.example
-
 
 ############################################
 # Node / Frontend
 ############################################
 
-node_modules
-dist
-dist-ssr
-*.local
+frontend/.vite/
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
 
 ############################################
 # Editor / OS
 ############################################
 
-.vscode/*
+.vscode/
 !.vscode/extensions.json
 
 .idea
@@ -57,22 +64,9 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# Frontend (Vite)
-.vite/
-dist/
-.vite-cache/
-
 ############################################
 # Logs
 ############################################
 
-logs
 *.log
-
-############################################
-# Optional (common full-stack additions)
-############################################
-
-.env
-.env.*
-!.env.example
+logs
