@@ -3,10 +3,11 @@
 ## Overview
 
 This project is a backend URL shortener service built using Ruby on Rails.
-It is designed to demonstrate clean API design, deterministic short code generation, and system design trade-offs in a simple but scalable architecture.
+It is designed to demonstrate clean API design, deterministic short code generation, and system design trade offs in a simple but scalable architecture.
 
 The system focuses on correctness, predictability, and performance while keeping the frontend completely decoupled.
 
+This project is intentionally designed to explore core system design concepts such as idempotency, deterministic encoding, and scalable URL resolution.
 
 ## Problem Statement
 
@@ -17,7 +18,6 @@ The system solves the problem of converting long URLs into short, unique identif
 - Provide fast redirection
 - Maintain deterministic behavior
 
-
 ## Features
 
 - Convert long URLs into short codes
@@ -27,7 +27,13 @@ The system solves the problem of converting long URLs into short, unique identif
 - RESTful API design
 - Simple and scalable schema
 
+## Tech Stack
 
+- Ruby on Rails (API-only backend)
+- React.js
+- PostgreSQL
+- Base62 encoding for ID transformation
+- RESTful API architecture
 
 ## Request Flow & API Endpoints
 
@@ -71,10 +77,9 @@ GET /:shortcode
 
 Redirects user to the original long URL.
 
-## Architectural Decisions & Research
-
 This section explains the reasoning behind key design choices and compares alternative approaches.
 
+## Architecture & Trade-offs
 
 ### 1. Short Code Generation Strategy
 
