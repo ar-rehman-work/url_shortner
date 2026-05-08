@@ -1,4 +1,6 @@
 class ShortUrlsController < ApplicationController
+  skip_before_action :authenticate_user!, only: [:redirect]
+
   def create
     long_url = params[:long_url]
 
