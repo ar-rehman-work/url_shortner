@@ -1,5 +1,4 @@
 class ShortUrl < ApplicationRecord
-
   belongs_to :user
 
   after_create :set_short_code
