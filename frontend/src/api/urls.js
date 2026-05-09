@@ -1,13 +1,28 @@
 import axios from 'axios'
 
-const BASE_URL = 'http://127.0.0.1:3000'
+const api = axios.create({ baseURL: 'http://localhost:3000' })
 
-export const createShortUrl = async (payload) => {
-  try {
-    const { data } = await axios.post(`${BASE_URL}/shorten`, payload)
-    return data
-  } catch (error) {
-    console.error('Error creating short URL:', error)
-    throw error
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('token')
+
+  if (!!token) {
+    config.headers.Authorization = `Bearer ${token}`
   }
+
+  return config
+})
+
+export const signup = async payload => {
+  const { data } = await api.post('/signup', payload)
+  return data
+}
+
+export const loginUser = async payload => {
+  const { data } = await api.post('/login', payload)
+  return data
+}
+
+export const createShortUrl = async payload => {
+  const { data } = await api.post('/shorten', payload)
+  return data
 }

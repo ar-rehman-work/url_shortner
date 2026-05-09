@@ -8,6 +8,9 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   # root "posts#index"
 
+  post '/signup', to: 'auth#signup'
+  post '/login', to: 'auth#login'
+
   post '/shorten', to: 'short_urls#create'
   get '/:short_code', to: 'short_urls#redirect'
 end

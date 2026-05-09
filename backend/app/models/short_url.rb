@@ -1,7 +1,9 @@
 class ShortUrl < ApplicationRecord
+  belongs_to :user
+
   after_create :set_short_code
 
-  validates :long_url, presence: true, uniqueness: true
+  validates :long_url, presence: true, uniqueness: { scope: :user_id }
 
   BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
