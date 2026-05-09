@@ -1,10 +1,38 @@
-import UrlForm from './components/UrlForm'
+import { Routes, Route, Navigate } from 'react-router-dom'
 
-function App() {
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import Dashboard from './pages/Dashboard'
+
+import ProtectedRoute from './components/ProtectedRoute'
+
+const App = () => {
   return (
-    <>
-      <UrlForm />
-    </>
+    <Routes>
+      <Route
+        path='/'
+        element={<Navigate to='/dashboard' replace />}
+      />
+
+      <Route
+        path='/login'
+        element={<Login />}
+      />
+
+      <Route
+        path='/signup'
+        element={<Signup />}
+      />
+
+      <Route
+        path='/dashboard'
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   )
 }
 
