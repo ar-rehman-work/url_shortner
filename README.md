@@ -34,6 +34,7 @@ The system solves the problem of converting long URLs into short, unique identif
 - PostgreSQL
 - Base62 encoding for ID transformation
 - RESTful API architecture
+- JWT authentication
 
 ## Request Flow & API Endpoints
 
@@ -45,6 +46,7 @@ Client → Controller → Model → Database → Response (short_code)
 
 ```http
 POST /shorten
+Authorization: Bearer <token>
 ```
 
 #### Request
@@ -165,13 +167,12 @@ Same long URL always returns the same short code.
 * Harder to support per-user variations
 * Limits future expiry flexibility
 
----
-
 ### 3. Database Design
 
 Single table design:
 
 * id
+* user_id
 * long_url
 * short_code
 * timestamps
@@ -179,18 +180,37 @@ Single table design:
 **Pros:**
 
 * Simple schema
-* Fast lookups
-* Easy indexing
+* Fast indexed lookups
+* Easy to extend
 
 **Cons:**
 
-* Not suitable for multi-user systems
-* Hard to extend for analytics/expiry
+* Needs migration for analytics/expiry later
+
+### 4. Authentication Design
+
+JWT-based authentication is used for stateless API access.
+
+**Flow:**
+
+* User logs in
+* Server returns JWT token
+* Frontend stores token
+* Token sent in Authorization header
+
+**Pros:**
+
+* Stateless backend
+* Scalable
+* Secure API access control
+
+**Cons:**
+
+* Token management required on frontend
+* Logout is client-side invalidation
 
 ## Future Improvements
 
-* User authentication system
-* Per-user URL management
 * Expiry-based URLs
 * Click analytics tracking
 * Redis caching for redirects
