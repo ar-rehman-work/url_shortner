@@ -9,6 +9,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     )
 
     @token = JwtService.encode(user_id: @user.id)
+    @headers = { 'Authorization' => "Bearer #{@token}" }
   end
 
   test 'rejects create without authentication' do
@@ -20,36 +21,59 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'Unauthorized', body['error']
   end
 
-  test 'should create short url successfully' do
-    post '/shorten', params: { long_url: 'https://www.example.com' }, headers: { 'Authorization' => "Bearer #{@token}" }
+  test 'creates short url successfully when authenticated' do
+    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
 
     assert_response :success
-    body = JSON.parse(response.body)
 
+    body = JSON.parse(response.body)
     assert_not_nil body['short_code']
   end
 
-  test 'should not create short url without long url' do
-    post '/shorten', params: {}, headers: { 'Authorization' => "Bearer #{@token}" }
+  test 'rejects create without long url' do
+    post '/shorten', params: { }, headers: @headers
 
     assert_response :bad_request
-    body = JSON.parse(response.body)
 
+    body = JSON.parse(response.body)
     assert_equal 'Long URL must be provided', body['error']
   end
 
-  test 'should return same short code for same long url' do
-    post '/shorten', params: { long_url: 'https://www.example.com' }, headers: { 'Authorization' => "Bearer #{@token}" }
+  test 'returns same short code for same long url for same user' do
+    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+
     first = JSON.parse(response.body)['short_code']
 
-    post '/shorten', params: { long_url: 'https://www.example.com' }, headers: { 'Authorization' => "Bearer #{@token}" }
+    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+
     second = JSON.parse(response.body)['short_code']
 
     assert_equal first, second
   end
 
-  test 'should redirect to original url' do
-    short_url = short_urls(:one)
+  test 'different users can have same long url but different records' do
+    user2 = User.create!(
+      name: 'User Two',
+      email: 'user2@example.com',
+      password: 'password123'
+    )
+
+    token2 = JwtService.encode(user_id: user2.id)
+    headers2 = { 'Authorization' => "Bearer #{token2}" }
+
+    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+
+    first_user_code = JSON.parse(response.body)['short_code']
+
+    post '/shorten', params: { long_url: 'https://example.com' }, headers: headers2
+
+    second_user_code = JSON.parse(response.body)['short_code']
+
+    assert_not_equal first_user_code, second_user_code
+  end
+
+  test 'redirects to original url' do
+    short_url = ShortUrl.create!(user_id: @user.id, long_url: 'https://example.com')
 
     get "/#{short_url.short_code}"
 
@@ -57,12 +81,12 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_equal short_url.long_url, response.location
   end
 
-  test 'should return not found for invalid short_code' do
+  test 'returns not found for invalid short code' do
     get '/invalidcode'
 
     assert_response :not_found
-    body = JSON.parse(response.body)
 
+    body = JSON.parse(response.body)
     assert_equal 'Not found', body['error']
   end
 end
