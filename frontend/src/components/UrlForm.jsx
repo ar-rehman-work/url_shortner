@@ -20,9 +20,7 @@ const UrlForm = ({ onSuccess }) => {
       onSuccess(data)
       setUrl('')
     } catch (error) {
-      setError(
-        error.response?.data?.error || 'Failed to shorten URL'
-      )
+      setError('URL shortening failed. Please enter a valid URL.')
     }
 
     setLoading(false)

@@ -5,12 +5,16 @@ class ShortUrlsController < ApplicationController
     long_url = params[:long_url]
 
     if long_url.blank?
-      return render json: { error: 'Long URL must be provided' }, status: :bad_request
+      return render json: { error: 'Long url must be provided' }, status: :bad_request
     end
 
-    short_url = ShortUrl.find_or_create_by(long_url: long_url, user_id: current_user.id)
+    short_url = ShortUrl.find_or_initialize_by(long_url: long_url, user_id: current_user.id)
 
-    render json: { short_code: short_url.short_code }, status: :ok
+    if short_url.save
+      render json: { short_code: short_url.short_code }, status: :ok
+    else
+      render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   def redirect

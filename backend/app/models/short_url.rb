@@ -3,9 +3,17 @@ class ShortUrl < ApplicationRecord
 
   after_create :set_short_code
 
-  validates :long_url, presence: true, uniqueness: { scope: :user_id }
+  before_validation :normalize_long_url
 
-  BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+  validates :long_url,
+          presence: true,
+          uniqueness: { scope: :user_id },
+          format: {
+            with: /\Ahttps?:\/\/.+\..+\z/,
+            message: 'must be a valid URL'
+          }
+
+  BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
 
   private
 
@@ -25,5 +33,9 @@ class ShortUrl < ApplicationRecord
     end
 
     encoded.reverse
+  end
+
+  def normalize_long_url
+    self.long_url = long_url.strip if long_url.present?
   end
 end
