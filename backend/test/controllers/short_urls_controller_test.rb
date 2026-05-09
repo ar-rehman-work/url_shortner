@@ -36,7 +36,16 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_response :bad_request
 
     body = JSON.parse(response.body)
-    assert_equal 'Long URL must be provided', body['error']
+    assert_equal 'Long url must be provided', body['error']
+  end
+
+  test 'rejects create with invalid long url' do
+    post '/shorten', params: { long_url: 'invalid_url' }, headers: @headers
+
+    assert_response :unprocessable_entity
+
+    body = JSON.parse(response.body)
+    assert_includes body['errors'], 'Long url must be a valid URL'
   end
 
   test 'returns same short code for same long url for same user' do
