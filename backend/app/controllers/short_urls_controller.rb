@@ -1,11 +1,18 @@
 class ShortUrlsController < ApplicationController
-  include Pagy::Backend
+  include Pagy::Method
 
   skip_before_action :authenticate_user!, only: [:redirect]
   before_action :check_long_url, only: [:create]
 
   def index
     filtered_urls = current_user.short_urls
+
+    case params[:expired]
+    when 'true', true
+      filtered_urls = filtered_urls.expired
+    when 'false', false
+      filtered_urls = filtered_urls.active
+    end
 
     if params[:q].present?
       query = "%#{params[:q]}%"
@@ -16,20 +23,9 @@ class ShortUrlsController < ApplicationController
       )
     end
 
-    if ActiveModel::Type::Boolean.new.cast(params[:expired])
-      filtered_urls = filtered_urls.where(
-        'expires_at IS NOT NULL AND expires_at <= ?',
-        Time.current
-      )
-    end
+    @pagy, short_urls = pagy(filtered_urls.order(created_at: :desc), items: params[:limit].to_i)
 
-    limit = params[:limit].to_i
-    limit = 10 if limit <= 0
-    limit = 50 if limit > 50
-
-    @pagy, short_urls = pagy(filtered_urls.order(created_at: :desc), items: limit)
-
-    render json: { data: short_urls, pagination: pagy_metadata(@pagy) }
+    render json: { data: short_urls, pagination: @pagy.data_hash }
   end
 
   def create
@@ -38,7 +34,7 @@ class ShortUrlsController < ApplicationController
     short_url.custom_alias = short_url_params[:custom_alias].presence
 
     if short_url.save
-      render json: { short_code: short_url.short_code }, status: :ok
+      render json: { short_code: short_url.custom_alias.presence || short_url.short_code }, status: :ok
     else
       render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
     end
