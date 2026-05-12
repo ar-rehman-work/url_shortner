@@ -1,7 +1,7 @@
 class ShortUrlsController < ApplicationController
   include Pagy::Method
 
-  skip_before_action :authenticate_user!, only: [:redirect]
+  skip_before_action :authenticate_user!, only: [:redirect_by_short_code, :redirect_by_custom_alias]
   before_action :check_long_url, only: [:create]
 
   def index
@@ -40,16 +40,15 @@ class ShortUrlsController < ApplicationController
     end
   end
 
-  def redirect
-    short_url = ShortUrl.find_by(short_code: params[:short_code]) || ShortUrl.find_by(custom_alias: params[:short_code])
+  def redirect_by_short_code
+    short_url = ShortUrl.find_by(short_code: "s/#{params[:short_code]}")
+    handle_redirect(short_url)
+  end
 
-    if short_url
-      return render json: { error: 'URL has expired' }, status: :gone if short_url.expired?
-
-      redirect_to short_url.long_url, allow_other_host: true
-    else
-      render json: { error: 'Not found' }, status: :not_found
-    end
+  def redirect_by_custom_alias
+    puts params.inspect
+    short_url = ShortUrl.find_by(custom_alias: params[:custom_alias])
+    handle_redirect(short_url)
   end
 
   private
@@ -60,5 +59,12 @@ class ShortUrlsController < ApplicationController
 
   def check_long_url
     return render json: { error: 'Long url must be provided' }, status: :bad_request if short_url_params[:long_url].blank?
+  end
+
+  def handle_redirect(short_url)
+    return render json: { error: 'Not found' }, status: :not_found unless short_url
+    return render json: { error: 'URL has expired' }, status: :gone if short_url.expired?
+
+    redirect_to short_url.long_url, allow_other_host: true
   end
 end

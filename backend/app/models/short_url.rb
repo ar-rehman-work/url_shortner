@@ -35,10 +35,10 @@ class ShortUrl < ApplicationRecord
   private
 
   def set_short_code
-    update_column(:short_code, encode_base62(id)) if short_code.blank?
+    update_column(:short_code, generate_code(id)) if short_code.blank?
   end
 
-  def encode_base62(num)
+  def generate_code(num)
     return '0' if num == 0
 
     base = BASE62.length
@@ -49,7 +49,7 @@ class ShortUrl < ApplicationRecord
       num /= base
     end
 
-    encoded.reverse
+    "s/#{encoded.reverse}"
   end
 
   def normalize_long_url
