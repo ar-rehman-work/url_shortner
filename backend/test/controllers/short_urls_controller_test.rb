@@ -27,11 +27,13 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     body = JSON.parse(response.body)
+
     assert_not_nil body['short_code']
+    assert_equal 6, body['short_code'].length
   end
 
   test 'rejects create without long url' do
-    post '/shorten', params: { }, headers: @headers
+    post '/shorten', params: {}, headers: @headers
 
     assert_response :bad_request
 
@@ -45,6 +47,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
 
     body = JSON.parse(response.body)
+
     assert_includes body['errors'], 'Long url must be a valid URL'
   end
 
@@ -57,7 +60,10 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     second = JSON.parse(response.body)['short_code']
 
+    assert_response :success
+
     assert_equal first, second
+    assert_equal 1, @user.short_urls.count
   end
 
   test 'different users can have same long url but different records' do
@@ -78,16 +84,105 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     second_user_code = JSON.parse(response.body)['short_code']
 
+    assert_response :success
+
     assert_not_equal first_user_code, second_user_code
+    assert_equal 1, user2.short_urls.count
   end
 
-  test 'redirects to original url' do
-    short_url = ShortUrl.create!(user_id: @user.id, long_url: 'https://example.com')
+  test 'creates short url with custom alias' do
+    post '/shorten',
+        params: {
+          long_url: 'https://example.com',
+          custom_alias: 'myalias'
+        },
+        headers: @headers
+
+    assert_response :success
+    
+    body = JSON.parse(response.body)
+
+    assert_equal 'myalias', body['short_code']
+  end
+
+  test 'rejects duplicate custom alias' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://google.com',
+      custom_alias: 'takenalias'
+    )
+
+    post '/shorten',
+         params: {
+           long_url: 'https://example.com',
+           custom_alias: 'takenalias'
+         },
+         headers: @headers
+
+    assert_response :unprocessable_entity
+
+    body = JSON.parse(response.body)
+
+    assert body['errors'].any?
+  end
+
+  test 'creates short url with expiration date' do
+    expires_at = 2.days.from_now
+
+    post '/shorten',
+         params: {
+           long_url: 'https://example.com',
+           expires_at: expires_at
+         },
+         headers: @headers
+
+    assert_response :success
+
+    short_url = ShortUrl.last
+
+    assert_not_nil short_url.expires_at
+  end
+
+  test 'redirects using short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
 
     get "/#{short_url.short_code}"
 
     assert_response :redirect
     assert_equal short_url.long_url, response.location
+  end
+
+  test 'redirects using custom alias' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com',
+      custom_alias: 'github'
+    )
+
+    get '/github'
+
+    assert_response :redirect
+    assert_equal short_url.long_url, response.location
+  end
+
+  test 'returns gone for expired short url' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.update_column(:expires_at, 1.day.ago)
+
+    get "/#{short_url.short_code}"
+
+    assert_response :gone
+
+    body = JSON.parse(response.body)
+
+    assert_equal 'URL has expired', body['error']
   end
 
   test 'returns not found for invalid short code' do
@@ -96,6 +191,125 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
 
     body = JSON.parse(response.body)
+
     assert_equal 'Not found', body['error']
+  end
+
+  test 'returns paginated short urls list' do
+    15.times do |i|
+      ShortUrl.create!(
+        user_id: @user.id,
+        long_url: "https://example#{i}.com"
+      )
+    end
+
+    get '/',
+        params: { limit: 10 },
+        headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 10, body['data'].length
+    assert_not_nil body['pagination']
+  end
+
+  test 'filters short urls by search query' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://google.com',
+      custom_alias: 'google'
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://github.com',
+      custom_alias: 'github'
+    )
+
+    get '/',
+        params: { q: 'github' },
+        headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+    assert_equal 'github', body['data'][0]['custom_alias']
+  end
+
+  test 'filters expired short urls when expired=true' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://expired.com'
+    )
+
+    short_url.update_column(:expires_at, 1.day.ago)
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://active.com',
+      expires_at: 1.day.from_now
+    )
+
+    get '/', params: { expired: true }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+    assert_equal 'https://expired.com', body['data'][0]['long_url']
+  end
+
+
+  test 'filters active urls when expired=false' do
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://expired.com').tap do |u|
+      u.update_column(:expires_at, 1.day.ago)
+    end
+
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://active.com', expires_at: 1.day.from_now)
+
+    get '/', params: { expired: false }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+  end
+
+  test 'returns all urls when expired param is missing' do
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://expired.com').tap do |u|
+      u.update_column(:expires_at, 1.day.ago)
+    end
+
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://active.com', expires_at: 1.day.from_now)
+
+    get '/', headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 2, body['data'].length
+  end
+
+  test 'returns all urls when expired param is neither true nor false' do
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://expired.com').tap do |u|
+      u.update_column(:expires_at, 1.day.ago)
+    end
+
+    ShortUrl.create!(user_id: @user.id, long_url: 'https://active.com', expires_at: 1.day.from_now)
+
+    get '/', params: { expired: 'invalid_value' }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 2, body['data'].length
   end
 end

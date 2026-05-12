@@ -1,6 +1,9 @@
 class ShortUrl < ApplicationRecord
   belongs_to :user
 
+  scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
+  scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
+
   after_create :set_short_code
 
   before_validation :normalize_long_url
