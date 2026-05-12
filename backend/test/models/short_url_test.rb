@@ -42,14 +42,17 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert_equal 'https://example.com', short_url.long_url
   end
 
-  test 'should save with valid long url' do
+  test 'should save with valid long url and generate short_code' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id
     )
 
+    short_url.reload
+
     assert short_url.persisted?
     assert_not_nil short_url.short_code
+    assert_match(/\As\/[a-zA-Z0-9]+\z/, short_url.short_code)
   end
 
   test 'should not allow duplicate long url for same user' do
@@ -87,19 +90,7 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert second.save
   end
 
-  test 'should generate short code after create' do
-    short_url = ShortUrl.create!(
-      long_url: 'https://example.com',
-      user_id: @user.id
-    )
-
-    short_url.reload
-
-    assert_not_nil short_url.short_code
-    assert_match(/\A[a-zA-Z0-9]+\z/, short_url.short_code)
-  end
-
-  test 'short code should be unique per record' do
+  test 'should generate unique short codes' do
     url1 = ShortUrl.create!(
       long_url: 'https://a.com',
       user_id: @user.id
@@ -155,7 +146,7 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert_not short_url.expired?
   end
 
-  test 'expired? returns false when expires_at is not present' do
+  test 'expired? returns false when expires_at is nil' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id
