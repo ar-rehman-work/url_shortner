@@ -2,6 +2,8 @@ require 'test_helper'
 
 class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   def setup
+    ShortUrl.const_set(:HOST, 'http://localhost:3000') unless ShortUrl.const_defined?(:HOST)
+
     @user = User.create!(
       name: 'Test User',
       email: 'test@example.com',
@@ -31,7 +33,8 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     body = JSON.parse(response.body)
 
-    assert_not_nil body['short_code']
+    assert_not_nil body['short_url']
+    assert_match(%r{\Ahttp://localhost:3000/s/[a-zA-Z0-9]+\z}, body['short_url'])
   end
 
   test 'rejects create without long url' do
@@ -56,12 +59,12 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert body['errors'].any?
   end
 
-  test 'returns same short code for same long url for same user' do
+  test 'returns same short url for same long url for same user' do
     post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
-    first = JSON.parse(response.body)['short_code']
+    first = JSON.parse(response.body)['short_url']
 
     post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
-    second = JSON.parse(response.body)['short_code']
+    second = JSON.parse(response.body)['short_url']
 
     assert_response :success
 
@@ -80,14 +83,14 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     headers2 = { 'Authorization' => "Bearer #{token2}" }
 
     post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
-    first_user_code = JSON.parse(response.body)['short_code']
+    first_user_url = JSON.parse(response.body)['short_url']
 
     post '/shorten', params: { long_url: 'https://example.com' }, headers: headers2
-    second_user_code = JSON.parse(response.body)['short_code']
+    second_user_url = JSON.parse(response.body)['short_url']
 
     assert_response :success
 
-    assert_not_equal first_user_code, second_user_code
+    assert_not_equal first_user_url, second_user_url
   end
 
   test 'creates short url with custom alias' do
@@ -102,7 +105,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     body = JSON.parse(response.body)
 
-    assert_equal 'myalias', body['short_code']
+    assert_equal 'http://localhost:3000/myalias', body['short_url']
   end
 
   test 'rejects duplicate custom alias' do
@@ -149,7 +152,9 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://example.com'
     )
 
-    get "/#{short_url.short_code}"
+    short_url.reload
+
+    get "/s/#{short_url.short_code}"
 
     assert_response :redirect
     assert_equal short_url.long_url, response.location
@@ -174,9 +179,10 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://example.com'
     )
 
+    short_url.reload
     short_url.update_column(:expires_at, 1.day.ago)
 
-    get "/#{short_url.short_code}"
+    get "/s/#{short_url.short_code}"
 
     assert_response :gone
 
@@ -213,6 +219,8 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal 10, body['data'].length
     assert_not_nil body['pagination']
+    assert body['data'][0].key?('short_url')
+    assert body['data'][0].key?('custom')
   end
 
   test 'filters short urls by search query' do
@@ -229,7 +237,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     )
 
     get '/',
-        params: { q: 'github' },
+        params: { q: 'github', limit: 10 },
         headers: @headers
 
     assert_response :success
@@ -237,7 +245,9 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     body = JSON.parse(response.body)
 
     assert_equal 1, body['data'].length
-    assert_equal 'github', body['data'][0]['custom_alias']
+    assert_equal 'https://github.com', body['data'][0]['long_url']
+    assert_equal true, body['data'][0]['custom']
+    assert_equal 'http://localhost:3000/github', body['data'][0]['short_url']
   end
 
   test 'filters expired urls when expired=true' do
@@ -254,13 +264,14 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: true }, headers: @headers
+    get '/', params: { expired: true, limit: 10 }, headers: @headers
 
     assert_response :success
 
     body = JSON.parse(response.body)
 
     assert_equal 1, body['data'].length
+    assert_equal 'https://expired.com', body['data'][0]['long_url']
   end
 
   test 'filters active urls when expired=false' do
@@ -274,13 +285,14 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: false }, headers: @headers
+    get '/', params: { expired: false, limit: 10 }, headers: @headers
 
     assert_response :success
 
     body = JSON.parse(response.body)
 
     assert_equal 1, body['data'].length
+    assert_equal 'https://active.com', body['data'][0]['long_url']
   end
 
   test 'returns all urls when expired param is missing' do
@@ -294,7 +306,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', headers: @headers
+    get '/', params: { limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -314,7 +326,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: 'invalid' }, headers: @headers
+    get '/', params: { expired: 'invalid', limit: 10 }, headers: @headers
 
     assert_response :success
 

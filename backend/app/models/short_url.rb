@@ -32,13 +32,23 @@ class ShortUrl < ApplicationRecord
     expires_at.present? && expires_at <= Time.current
   end
 
+  def url
+    path = if custom_alias.present?
+      custom_alias
+    else
+      "s/#{short_code}"
+    end
+
+    "#{HOST}/#{path}"
+  end
+
   private
 
   def set_short_code
-    update_column(:short_code, generate_code(id)) if short_code.blank?
+    update_column(:short_code, encode_base62(id)) if short_code.blank?
   end
 
-  def generate_code(num)
+  def encode_base62(num)
     return '0' if num == 0
 
     base = BASE62.length
@@ -49,7 +59,7 @@ class ShortUrl < ApplicationRecord
       num /= base
     end
 
-    "s/#{encoded.reverse}"
+    encoded.reverse
   end
 
   def normalize_long_url

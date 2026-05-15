@@ -25,6 +25,17 @@ class ShortUrlsController < ApplicationController
 
     @pagy, short_urls = pagy(filtered_urls.order(created_at: :desc), items: params[:limit].to_i)
 
+    short_urls = short_urls.map do |short_url|
+      {
+        id: short_url.id,
+        long_url: short_url.long_url,
+        short_url: short_url.url,
+        custom: short_url.custom_alias.present?,
+        expires_at: short_url.expires_at,
+        created_at: short_url.created_at
+      }
+    end
+
     render json: { data: short_urls, pagination: @pagy.data_hash }
   end
 
@@ -34,19 +45,18 @@ class ShortUrlsController < ApplicationController
     short_url.custom_alias = short_url_params[:custom_alias].presence
 
     if short_url.save
-      render json: { short_code: short_url.custom_alias.presence || short_url.short_code }, status: :ok
+      render json: { short_url: short_url.url }, status: :ok
     else
       render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   def redirect_by_short_code
-    short_url = ShortUrl.find_by(short_code: "s/#{params[:short_code]}")
+    short_url = ShortUrl.find_by(short_code: params[:short_code])
     handle_redirect(short_url)
   end
 
   def redirect_by_custom_alias
-    puts params.inspect
     short_url = ShortUrl.find_by(custom_alias: params[:custom_alias])
     handle_redirect(short_url)
   end
