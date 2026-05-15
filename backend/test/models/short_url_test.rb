@@ -2,6 +2,8 @@ require 'test_helper'
 
 class ShortUrlTest < ActiveSupport::TestCase
   def setup
+    ShortUrl.const_set(:HOST, 'http://localhost:3000') unless ShortUrl.const_defined?(:HOST)
+
     @user = User.create!(
       name: 'Test User',
       email: 'test@example.com',
@@ -52,7 +54,34 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     assert short_url.persisted?
     assert_not_nil short_url.short_code
-    assert_match(/\As\/[a-zA-Z0-9]+\z/, short_url.short_code)
+    assert_match(/\A[a-zA-Z0-9]+\z/, short_url.short_code)
+  end
+
+  test 'should generate correct url with short code' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id
+    )
+
+    short_url.reload
+
+    assert_equal(
+      "http://localhost:3000/s/#{short_url.short_code}",
+      short_url.url
+    )
+  end
+
+  test 'should generate correct url with custom alias' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      custom_alias: 'myalias'
+    )
+
+    assert_equal(
+      'http://localhost:3000/myalias',
+      short_url.url
+    )
   end
 
   test 'should not allow duplicate long url for same user' do
@@ -160,6 +189,7 @@ class ShortUrlTest < ActiveSupport::TestCase
       long_url: 'https://expired.com',
       user_id: @user.id
     )
+
     expired_url.update_column(:expires_at, 1.day.ago)
 
     active_url = ShortUrl.create!(
@@ -179,6 +209,7 @@ class ShortUrlTest < ActiveSupport::TestCase
       long_url: 'https://expired.com',
       user_id: @user.id
     )
+
     expired_url.update_column(:expires_at, 1.day.ago)
 
     active_url = ShortUrl.create!(
