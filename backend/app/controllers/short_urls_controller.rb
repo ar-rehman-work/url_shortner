@@ -14,6 +14,13 @@ class ShortUrlsController < ApplicationController
       filtered_urls = filtered_urls.active
     end
 
+    case params[:custom]
+    when 'true', true
+      filtered_urls = filtered_urls.custom
+    when 'false', false
+      filtered_urls = filtered_urls.generated
+    end
+
     if params[:q].present?
       query = "%#{params[:q]}%"
 
