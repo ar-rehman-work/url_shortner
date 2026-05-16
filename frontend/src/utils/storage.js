@@ -11,9 +11,13 @@ export const removeToken = () => {
 }
 
 export const getUser = () => {
-  const user = localStorage.getItem('user')
-
-  return user ? JSON.parse(user) : null
+  try {
+    const user = localStorage.getItem('user')
+    return user ? JSON.parse(user) : null
+  } catch {
+    removeUser()
+    return null
+  }
 }
 
 export const setUser = user => {
