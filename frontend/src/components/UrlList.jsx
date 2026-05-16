@@ -33,9 +33,19 @@ const UrlList = ({
             onChange={(e) => onFilterChange('expired', e.target.value)}
             className='border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black'
           >
-            <option value=''>All</option>
+            <option value=''>All Status</option>
             <option value='true'>Expired</option>
             <option value='false'>Active</option>
+          </select>
+
+          <select
+            value={filters.custom || ''}
+            onChange={(e) => onFilterChange('custom', e.target.value)}
+            className='border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black'
+          >
+            <option value=''>All Types</option>
+            <option value='true'>Custom</option>
+            <option value='false'>Generated</option>
           </select>
 
         </div>
@@ -52,7 +62,7 @@ const UrlList = ({
           <div className='grid grid-cols-12 px-5 py-3 text-xs font-semibold text-gray-500 border-b border-gray-200'>
             <div className='col-span-5'>Original URL</div>
             <div className='col-span-3'>Short URL</div>
-            <div className='col-span-2'>Status</div>
+            <div className='col-span-2'>Status & Type</div>
             <div className='col-span-2 text-right'>Actions</div>
           </div>
 
