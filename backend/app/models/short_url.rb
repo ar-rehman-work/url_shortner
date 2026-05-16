@@ -3,6 +3,8 @@ class ShortUrl < ApplicationRecord
 
   scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
   scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
+  scope :custom, -> { where.not(custom_alias: [nil, '']) }
+  scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
 
