@@ -32,6 +32,7 @@ class ShortUrlsController < ApplicationController
         short_url: short_url.url,
         custom: short_url.custom_alias.present?,
         expires_at: short_url.expires_at,
+        expired: short_url.expired?,
         created_at: short_url.created_at
       }
     end
