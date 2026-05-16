@@ -1,51 +1,45 @@
-import { createContext, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { createContext, useEffect, useMemo, useState } from 'react'
+import {
+  getToken,
+  getUser,
+  setToken,
+  setUser,
+  removeToken,
+  removeUser
+} from '../utils/storage'
 
-const AuthContext = createContext()
+const AuthContext = createContext(null)
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(null)
-  const [user, setUser] = useState(null)
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token')
-    const storedUser = localStorage.getItem('user')
-
-    if (!!storedToken) {
-      setToken(storedToken)
-    }
-
-    if (!!storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-  }, [])
+  const [authToken, setAuthToken] = useState(getToken())
+  const [authUser, setAuthUser] = useState(getUser())
 
   const login = ({ token, user }) => {
-    localStorage.setItem('token', token)
-    localStorage.setItem('user', JSON.stringify(user))
+    setAuthToken(token)
+    setAuthUser(user)
 
     setToken(token)
     setUser(user)
   }
 
   const logout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    setAuthToken(null)
+    setAuthUser(null)
 
-    setToken(null)
-    setUser(null)
+    removeToken()
+    removeUser()
   }
 
+  const value = useMemo(() => ({
+    token: authToken,
+    user: authUser,
+    login,
+    logout,
+    isAuthenticated: !!authToken
+  }), [authToken, authUser])
+
   return (
-    <AuthContext.Provider
-      value={{
-        token,
-        user,
-        login,
-        logout,
-        isAuthenticated: !!token
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

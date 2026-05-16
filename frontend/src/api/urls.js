@@ -26,3 +26,8 @@ export const createShortUrl = async payload => {
   const { data } = await api.post('/shorten', payload)
   return data
 }
+
+export const getShortUrls = async params => {
+  const { data } = await api.get('/', { params })
+  return data
+}

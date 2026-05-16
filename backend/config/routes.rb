@@ -11,6 +11,8 @@ Rails.application.routes.draw do
   post '/signup', to: 'auth#signup'
   post '/login', to: 'auth#login'
 
+  root 'short_urls#index'
   post '/shorten', to: 'short_urls#create'
-  get '/:short_code', to: 'short_urls#redirect'
+  get '/s/:short_code', to: 'short_urls#redirect_by_short_code'
+  get '/:custom_alias', to: 'short_urls#redirect_by_custom_alias'
 end
