@@ -37,9 +37,22 @@ gem "image_processing", "~> 1.2"
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 gem "rack-cors"
+# Use Rack ATTACK for Rate Limiting Users
+gem 'rack-attack'
 
 # Pagination
 gem 'pagy'
+
+# Use Redis for Cache, Counter, Optimization
+gem 'redis'
+# For Job Scheduling
+gem 'sidekiq'
+gem 'sidekiq-cron'
+
+# User Browser to keep track of request comming from which origin
+gem 'browser'
+# To get Location information of Origin
+gem 'geocoder'
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
@@ -53,4 +66,7 @@ group :development, :test do
 
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
+
+  # environment variable
+  gem 'dotenv-rails'
 end
