@@ -1,0 +1,4 @@
+sync_click_counts_job:
+  cron: '*/5 * * * *'
+  class: 'SyncClickCountsJob'
+  queue: default
