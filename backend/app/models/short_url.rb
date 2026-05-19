@@ -1,5 +1,6 @@
 class ShortUrl < ApplicationRecord
   belongs_to :user
+  has_many :click_events, dependent: :destroy
 
   scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
   scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
@@ -7,6 +8,7 @@ class ShortUrl < ApplicationRecord
   scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
+  after_commit :clear_redirect_cache
 
   before_validation :normalize_long_url
   before_validation :check_custom_alias
@@ -28,7 +30,7 @@ class ShortUrl < ApplicationRecord
           }
 
   BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
-  RESERVED_SHORT_CODES = %w[shorten login signup].freeze
+  RESERVED_SHORT_CODES = %w[shorten login signup sidekiq].freeze
 
   def expired?
     expires_at.present? && expires_at <= Time.current
@@ -48,6 +50,13 @@ class ShortUrl < ApplicationRecord
 
   def set_short_code
     update_column(:short_code, encode_base62(id)) if short_code.blank?
+  end
+
+  def clear_redirect_cache
+    SyncClickCountsJob.perform_later(id)
+
+    Rails.cache.delete("short_url:s_#{short_code}") if short_code.present?
+    Rails.cache.delete("short_url:#{custom_alias}") if custom_alias.present?
   end
 
   def encode_base62(num)
