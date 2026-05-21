@@ -70,3 +70,7 @@ group :development, :test do
   # environment variable
   gem 'dotenv-rails'
 end
+
+group :test do
+  gem 'mocha', require: false
+end

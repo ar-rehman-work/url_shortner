@@ -10,7 +10,6 @@ one:
   device_type: MyString
   browser: MyString
   os: MyString
-  clicked_at: 2026-05-16 19:05:45
 
 two:
   short_url: two
@@ -22,4 +21,3 @@ two:
   device_type: MyString
   browser: MyString
   os: MyString
-  clicked_at: 2026-05-16 19:05:45

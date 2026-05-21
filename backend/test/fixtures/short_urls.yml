@@ -4,8 +4,43 @@ one:
   user: one
   short_code: short1
   long_url: https://example.com/1
+  custom_alias:
+  expires_at:
+  click_count: 0
+  last_click_at:
 
 two:
   user: two
   short_code: short2
   long_url: https://example.com/2
+  custom_alias:
+  expires_at:
+  click_count: 0
+  last_click_at:
+
+custom:
+  user: one
+  short_code: short3
+  long_url: https://example.com/custom
+  custom_alias: custom-path
+  expires_at:
+  click_count: 3
+  last_click_at: <%= 1.hour.ago %>
+
+active:
+  user: one
+  short_code: short4
+  long_url: https://example.com/active
+  custom_alias:
+  expires_at: <%= 1.day.from_now %>
+  click_count: 5
+  last_click_at: <%= 30.minutes.ago %>
+
+expired:
+  user: one
+  short_code: short5
+  long_url: https://example.com/expired
+  custom_alias:
+  expires_at: <%= 1.day.ago %>
+  click_count: 10
+  last_click_at: <%= 2.hours.ago %>
