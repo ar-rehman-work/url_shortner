@@ -60,12 +60,24 @@ class ShortUrlsController < ApplicationController
   end
 
   def redirect_by_short_code
-    short_url = ShortUrl.find_by(short_code: params[:short_code])
+    short_url = Rails.cache.fetch(
+      "short_url:s_#{params[:short_code]}",
+      expires_in: 12.hours
+    ) do
+      ShortUrl.find_by(short_code: params[:short_code])
+    end
+
     handle_redirect(short_url)
   end
 
   def redirect_by_custom_alias
-    short_url = ShortUrl.find_by(custom_alias: params[:custom_alias])
+    short_url = Rails.cache.fetch(
+      "short_url:#{params[:custom_alias]}",
+      expires_in: 12.hours
+    ) do
+      ShortUrl.find_by(custom_alias: params[:custom_alias])
+    end
+
     handle_redirect(short_url)
   end
 
@@ -82,6 +94,19 @@ class ShortUrlsController < ApplicationController
   def handle_redirect(short_url)
     return render json: { error: 'Not found' }, status: :not_found unless short_url
     return render json: { error: 'URL has expired' }, status: :gone if short_url.expired?
+
+    REDIS.pipelined do |pipeline|
+      pipeline.sadd('active_click_urls', short_url.id)
+      pipeline.incr("url:#{short_url.id}:click_count")
+      pipeline.set("url:#{short_url.id}:last_click_at", Time.current.to_i)
+    end
+
+    TrackClickJob.perform_later(
+      short_url.id,
+      request.remote_ip,
+      request.user_agent,
+      request.referrer
+    )
 
     redirect_to short_url.long_url, allow_other_host: true
   end
