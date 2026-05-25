@@ -1,4 +1,19 @@
+require 'sidekiq/web'
+
 Rails.application.routes.draw do
+  Sidekiq::Web.use Rack::Auth::Basic do |username, password|
+    ActiveSupport::SecurityUtils.secure_compare(
+      username,
+      ENV.fetch('SIDEKIQ_USERNAME')
+    ) &
+    ActiveSupport::SecurityUtils.secure_compare(
+      password,
+      ENV.fetch('SIDEKIQ_PASSWORD')
+    )
+  end
+
+  mount Sidekiq::Web => '/sidekiq'
+
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.

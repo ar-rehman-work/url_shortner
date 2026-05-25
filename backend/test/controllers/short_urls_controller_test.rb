@@ -1,8 +1,15 @@
 require 'test_helper'
 
 class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
+  include ActiveJob::TestHelper
+
   def setup
     ShortUrl.const_set(:HOST, 'http://localhost:3000') unless ShortUrl.const_defined?(:HOST)
+
+    Rails.cache.clear
+    REDIS.clear
+    clear_enqueued_jobs
+    clear_performed_jobs
 
     @user = User.create!(
       name: 'Test User',
@@ -161,7 +168,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'redirects using custom alias route' do
-    short_url = ShortUrl.create!(
+    ShortUrl.create!(
       user_id: @user.id,
       long_url: 'https://example.com',
       custom_alias: 'github'
@@ -170,7 +177,129 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     get '/github'
 
     assert_response :redirect
-    assert_equal short_url.long_url, response.location
+    assert_equal 'https://example.com', response.location
+  end
+
+  test 'tracks click data in redis when redirecting short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+
+    get "/s/#{short_url.short_code}"
+
+    assert_response :redirect
+
+    assert_includes REDIS.smembers('active_click_urls'), short_url.id.to_s
+    assert_equal 1, REDIS.getdel("url:#{short_url.id}:click_count")
+  end
+
+  test 'tracks last click timestamp in redis when redirecting short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+
+    get "/s/#{short_url.short_code}"
+
+    assert_response :redirect
+
+    last_click_at = REDIS.getdel("url:#{short_url.id}:last_click_at")
+
+    assert_not_nil last_click_at
+    assert last_click_at.to_i <= Time.current.to_i
+  end
+
+  test 'enqueues track click job when redirecting short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+
+    assert_enqueued_with(job: TrackClickJob) do
+      get "/s/#{short_url.short_code}"
+    end
+
+    assert_response :redirect
+  end
+
+  test 'enqueues track click job with correct arguments when redirecting short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+
+    assert_enqueued_with(
+      job: TrackClickJob,
+      args: [
+        short_url.id,
+        '127.0.0.1',
+        nil,
+        nil
+      ]
+    ) do
+      get "/s/#{short_url.short_code}"
+    end
+
+    assert_response :redirect
+  end
+
+  test 'does not track redis click data for expired short url' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+    short_url.update_column(:expires_at, 1.day.ago)
+
+    get "/s/#{short_url.short_code}"
+
+    assert_response :gone
+
+    assert_empty REDIS.smembers('active_click_urls')
+    assert_nil REDIS.getdel("url:#{short_url.id}:click_count")
+    assert_nil REDIS.getdel("url:#{short_url.id}:last_click_at")
+  end
+
+  test 'does not enqueue track click job for expired short url' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+    short_url.update_column(:expires_at, 1.day.ago)
+
+    assert_no_enqueued_jobs only: TrackClickJob do
+      get "/s/#{short_url.short_code}"
+    end
+
+    assert_response :gone
+  end
+
+  test 'does not track redis click data for invalid short code' do
+    get '/s/invalidcode'
+
+    assert_response :not_found
+
+    assert_empty REDIS.smembers('active_click_urls')
+  end
+
+  test 'does not enqueue track click job for invalid short code' do
+    assert_no_enqueued_jobs only: TrackClickJob do
+      get '/s/invalidcode'
+    end
+
+    assert_response :not_found
   end
 
   test 'returns gone for expired short url' do
@@ -333,5 +462,127 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     body = JSON.parse(response.body)
 
     assert_equal 2, body['data'].length
+  end
+
+  test 'filters custom urls when custom=true' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://custom.com',
+      custom_alias: 'custom-url'
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://generated.com'
+    )
+
+    get '/', params: { custom: true, limit: 10 }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+    assert_equal 'https://custom.com', body['data'][0]['long_url']
+    assert_equal true, body['data'][0]['custom']
+  end
+
+  test 'filters generated urls when custom=false' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://custom.com',
+      custom_alias: 'custom-url'
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://generated.com'
+    )
+
+    get '/', params: { custom: false, limit: 10 }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+    assert_equal 'https://generated.com', body['data'][0]['long_url']
+    assert_equal false, body['data'][0]['custom']
+  end
+
+  test 'returns all urls when custom param is missing' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://custom.com',
+      custom_alias: 'custom-url'
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://generated.com'
+    )
+
+    get '/', params: { limit: 10 }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 2, body['data'].length
+  end
+
+  test 'returns all urls when custom param is invalid' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://custom.com',
+      custom_alias: 'custom-url'
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://generated.com'
+    )
+
+    get '/', params: { custom: 'invalid', limit: 10 }, headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 2, body['data'].length
+  end
+
+  test 'filters urls by expired and custom together' do
+    expired_custom = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://expired-custom.com',
+      custom_alias: 'expired-custom'
+    )
+    expired_custom.update_column(:expires_at, 1.day.ago)
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://active-custom.com',
+      custom_alias: 'active-custom',
+      expires_at: 1.day.from_now
+    )
+
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://expired-generated.com'
+    ).update_column(:expires_at, 1.day.ago)
+
+    get '/',
+        params: { expired: true, custom: true, limit: 10 },
+        headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 1, body['data'].length
+    assert_equal 'https://expired-custom.com', body['data'][0]['long_url']
+    assert_equal true, body['data'][0]['custom']
+    assert_equal true, body['data'][0]['expired']
   end
 end
