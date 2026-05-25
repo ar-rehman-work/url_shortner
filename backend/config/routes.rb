@@ -23,11 +23,15 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   # root "posts#index"
 
-  post '/signup', to: 'auth#signup'
-  post '/login', to: 'auth#login'
+  namespace :api do
+    namespace :v1 do
+      post '/signup', to: 'auth#signup'
+      post '/login', to: 'auth#login'
 
-  root 'short_urls#index'
-  post '/shorten', to: 'short_urls#create'
-  get '/s/:short_code', to: 'short_urls#redirect_by_short_code'
-  get '/:custom_alias', to: 'short_urls#redirect_by_custom_alias'
+      resources :short_urls
+    end
+  end
+
+  get '/s/:short_code', to: 'api/v1/short_urls#redirect_by_short_code'
+  get '/a/:custom_alias', to: 'api/v1/short_urls#redirect_by_custom_alias'
 end

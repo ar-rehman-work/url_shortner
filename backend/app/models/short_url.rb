@@ -29,16 +29,13 @@ class ShortUrl < ApplicationRecord
             message: 'must be a valid URL'
           }
 
-  BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
-  RESERVED_SHORT_CODES = %w[shorten login signup sidekiq].freeze
-
   def expired?
     expires_at.present? && expires_at <= Time.current
   end
 
   def url
     path = if custom_alias.present?
-      custom_alias
+      "a/#{custom_alias}"
     else
       "s/#{short_code}"
     end
@@ -62,11 +59,12 @@ class ShortUrl < ApplicationRecord
   def encode_base62(num)
     return '0' if num == 0
 
-    base = BASE62.length
+    charset = ENV.fetch('SHORT_URL_CHARSET')
+    base = charset.length
     encoded = ''
 
     while num > 0
-      encoded << BASE62[num % base]
+      encoded << charset[num % base]
       num /= base
     end
 
@@ -81,9 +79,5 @@ class ShortUrl < ApplicationRecord
     self.custom_alias = custom_alias.to_s.strip.downcase.presence
 
     return if custom_alias.blank?
-
-    if RESERVED_SHORT_CODES.include?(custom_alias)
-      errors.add(:custom_alias, 'is reserved')
-    end
   end
 end
