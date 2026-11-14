@@ -8,10 +8,10 @@ class ShortUrl < ApplicationRecord
   scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
-  after_commit :clear_redirect_cache
+  after_commit :sync_click_counts, on: [:create, :update]
+  after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
-  before_validation :check_custom_alias
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
   validates :custom_alias,
@@ -30,18 +30,13 @@ class ShortUrl < ApplicationRecord
           }
 
   BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
-  RESERVED_SHORT_CODES = %w[shorten login signup sidekiq].freeze
 
   def expired?
     expires_at.present? && expires_at <= Time.current
   end
 
   def url
-    path = if custom_alias.present?
-      custom_alias
-    else
-      "s/#{short_code}"
-    end
+    path = custom_alias.presence || short_code
 
     "#{HOST}/#{path}"
   end
@@ -52,11 +47,21 @@ class ShortUrl < ApplicationRecord
     update_column(:short_code, encode_base62(id)) if short_code.blank?
   end
 
-  def clear_redirect_cache
+  def sync_click_counts
     SyncClickCountsJob.perform_later(id)
+  end
 
-    Rails.cache.delete("short_url:s_#{short_code}") if short_code.present?
-    Rails.cache.delete("short_url:#{custom_alias}") if custom_alias.present?
+  def clear_redirect_cache
+    codes = [
+      short_code,
+      custom_alias,
+      *previous_changes.fetch('short_code', []),
+      *previous_changes.fetch('custom_alias', [])
+    ].compact.uniq
+
+    codes.each do |code|
+      Rails.cache.delete("sc:#{code}")
+    end
   end
 
   def encode_base62(num)
@@ -75,15 +80,5 @@ class ShortUrl < ApplicationRecord
 
   def normalize_long_url
     self.long_url = long_url.strip if long_url.present?
-  end
-
-  def check_custom_alias
-    self.custom_alias = custom_alias.to_s.strip.downcase.presence
-
-    return if custom_alias.blank?
-
-    if RESERVED_SHORT_CODES.include?(custom_alias)
-      errors.add(:custom_alias, 'is reserved')
-    end
   end
 end
