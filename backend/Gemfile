@@ -74,3 +74,5 @@ end
 group :test do
   gem 'mocha', require: false
 end
+
+gem "fiddle", "~> 1.1"
