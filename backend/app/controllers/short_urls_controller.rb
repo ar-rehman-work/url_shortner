@@ -1,7 +1,9 @@
 class ShortUrlsController < ApplicationController
   include Pagy::Method
 
-  skip_before_action :authenticate_user!, only: [:redirect_by_short_code, :redirect_by_custom_alias]
+  NOT_FOUND = '__not_found__'.freeze
+
+  skip_before_action :authenticate_user!, only: [:redirect_by_short_code]
   before_action :check_long_url, only: [:create]
 
   def index
@@ -60,25 +62,35 @@ class ShortUrlsController < ApplicationController
   end
 
   def redirect_by_short_code
-    short_url = Rails.cache.fetch(
-      "short_url:s_#{params[:short_code]}",
-      expires_in: 12.hours
-    ) do
-      ShortUrl.find_by(short_code: params[:short_code])
-    end
+    short_code = params[:short_code]
+    cache_key = "sc:#{short_code}"
+    cached_data = Rails.cache.read(cache_key)
 
-    handle_redirect(short_url)
-  end
+    redirect_data =
+      if cached_data.present?
+        cached_data
+      else
+        short_url = ShortUrl.find_by('custom_alias = :code OR short_code = :code', code: short_code)
 
-  def redirect_by_custom_alias
-    short_url = Rails.cache.fetch(
-      "short_url:#{params[:custom_alias]}",
-      expires_in: 12.hours
-    ) do
-      ShortUrl.find_by(custom_alias: params[:custom_alias])
-    end
+        data = NOT_FOUND
+        expiry = 1.minute
 
-    handle_redirect(short_url)
+        if short_url
+          data = {
+            id: short_url.id,
+            long_url: short_url.long_url,
+            expires_at: short_url.expires_at&.to_i
+          }
+
+          expiry = 5.hours
+        end
+
+        Rails.cache.write(cache_key, data, expires_in: expiry)
+
+        data
+      end
+
+    handle_redirect(redirect_data)
   end
 
   private
@@ -91,23 +103,26 @@ class ShortUrlsController < ApplicationController
     return render json: { error: 'Long url must be provided' }, status: :bad_request if short_url_params[:long_url].blank?
   end
 
-  def handle_redirect(short_url)
-    return render json: { error: 'Not found' }, status: :not_found unless short_url
-    return render json: { error: 'URL has expired' }, status: :gone if short_url.expired?
+  def handle_redirect(redirect_data)
+    return render json: { error: 'Not found' }, status: :not_found if redirect_data == NOT_FOUND
+
+    if redirect_data[:expires_at] && Time.current.to_i >= redirect_data[:expires_at]
+      return render json: { error: 'URL has expired' }, status: :gone
+    end
 
     REDIS.pipelined do |pipeline|
-      pipeline.sadd('active_click_urls', short_url.id)
-      pipeline.incr("url:#{short_url.id}:click_count")
-      pipeline.set("url:#{short_url.id}:last_click_at", Time.current.to_i)
+      pipeline.sadd('active_click_urls', redirect_data[:id])
+      pipeline.incr("url:#{redirect_data[:id]}:click_count")
+      pipeline.set("url:#{redirect_data[:id]}:last_click_at", Time.current.to_i)
     end
 
     TrackClickJob.perform_later(
-      short_url.id,
+      redirect_data[:id],
       request.remote_ip,
       request.user_agent,
       request.referrer
     )
 
-    redirect_to short_url.long_url, allow_other_host: true
+    redirect_to redirect_data[:long_url], allow_other_host: true
   end
 end
