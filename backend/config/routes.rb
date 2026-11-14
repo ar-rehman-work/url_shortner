@@ -12,22 +12,18 @@ Rails.application.routes.draw do
     )
   end
 
-  mount Sidekiq::Web => '/sidekiq'
+  scope path: 'api/v1' do
+    mount Sidekiq::Web => '/sidekiq'
 
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
+    post '/signup', to: 'auth#signup'
+    post '/login', to: 'auth#login'
 
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
+    root 'short_urls#index'
+    post '/shorten', to: 'short_urls#create'
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+    get '/up', to: 'rails/health#show', as: :rails_health_check
+  end
 
-  post '/signup', to: 'auth#signup'
-  post '/login', to: 'auth#login'
-
-  root 'short_urls#index'
-  post '/shorten', to: 'short_urls#create'
-  get '/s/:short_code', to: 'short_urls#redirect_by_short_code'
-  get '/:custom_alias', to: 'short_urls#redirect_by_custom_alias'
+  # Short URL redirects
+  get '/:short_code', to: 'short_urls#redirect_by_short_code', constraints: { short_code: /[a-zA-Z0-9_-]+/ }
 end
