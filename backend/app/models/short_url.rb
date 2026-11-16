@@ -3,18 +3,21 @@ class ShortUrl < ApplicationRecord
   has_many :click_events, dependent: :destroy
 
   scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
-  scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
-  scope :custom, -> { where.not(custom_alias: [nil, '']) }
-  scope :generated, -> { where(custom_alias: [nil, '']) }
+  scope :unexpired, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
+  scope :custom, -> { where(custom: true) }
+  scope :generated, -> { where(custom: false) }
+  scope :active, -> { where(active: true) }
+  scope :inactive, -> { where(active: false) }
 
   after_create :set_short_code
   after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
-  before_validation :normalize_custom_alias
+  before_validation :normalize_slug
+  before_validation :set_custom_flag, on: :create
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
-  validates :custom_alias,
+  validates :slug,
           allow_nil: true,
           uniqueness: true,
           format: {
@@ -36,32 +39,30 @@ class ShortUrl < ApplicationRecord
   end
 
   def url
-    path = custom_alias.presence || short_code
+    return if slug.blank?
 
-    "#{HOST}/#{path}"
+    "#{HOST}/#{slug}"
   end
 
   private
 
   def set_short_code
-    update_column(:short_code, encode_base62(id)) if short_code.blank?
+    code = encode_base62(id)
+
+    update_columns(short_code: code, slug: custom? ? slug : code)
   end
 
   def clear_redirect_cache
-    codes = [
-      short_code,
-      custom_alias,
-      *previous_changes.fetch('short_code', []),
-      *previous_changes.fetch('custom_alias', [])
-    ].compact.uniq
-
-    codes.each do |code|
-      Rails.cache.delete("sc:#{code}")
+    [
+      slug,
+      *previous_changes.fetch('slug', [])
+    ].compact.uniq.each do |identifier|
+      Rails.cache.delete("sc:#{identifier}")
     end
   end
 
   def encode_base62(num)
-    return '0' if num == 0
+    return '0' if num.zero?
 
     base = BASE62.length
     encoded = ''
@@ -78,9 +79,11 @@ class ShortUrl < ApplicationRecord
     self.long_url = long_url.strip if long_url.present?
   end
 
-  def normalize_custom_alias
-    self.custom_alias = custom_alias.to_s.strip.downcase.presence
+  def normalize_slug
+    self.slug = slug.to_s.strip.downcase.presence
+  end
 
-    return if custom_alias.blank?
+  def set_custom_flag
+    self.custom = slug.present?
   end
 end
