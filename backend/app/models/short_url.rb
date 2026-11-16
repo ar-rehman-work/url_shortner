@@ -8,7 +8,6 @@ class ShortUrl < ApplicationRecord
   scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
-  after_commit :sync_click_counts, on: :update
   after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
@@ -46,10 +45,6 @@ class ShortUrl < ApplicationRecord
 
   def set_short_code
     update_column(:short_code, encode_base62(id)) if short_code.blank?
-  end
-
-  def sync_click_counts
-    SyncClickCountsJob.perform_later(id)
   end
 
   def clear_redirect_cache
