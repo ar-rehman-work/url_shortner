@@ -12,7 +12,7 @@ const UrlItem = ({ url }) => {
   }
 
   return (
-    <div className='grid grid-cols-12 px-5 py-4 items-center hover:bg-gray-50 transition' key={url.key} >
+    <div className='grid grid-cols-12 px-5 py-4 items-center hover:bg-gray-50 transition'>
 
       <div className='col-span-5 text-sm text-gray-800 truncate pr-3'>
         {url.long_url.length > 60
