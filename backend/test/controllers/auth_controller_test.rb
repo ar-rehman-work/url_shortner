@@ -10,7 +10,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'signup creates user and returns token' do
-    post '/signup', params: {
+    post '/api/v1/signup', params: {
       name: 'New User',
       email: 'new@example.com',
       password: 'password123'
@@ -26,7 +26,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'signup fails with invalid params' do
-    post '/signup', params: {
+    post '/api/v1/signup', params: {
       name: '',
       email: '',
       password: ''
@@ -40,7 +40,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'signup fails with duplicate email' do
-    post '/signup', params: {
+    post '/api/v1/signup', params: {
       name: 'Another User',
       email: 'test@example.com',
       password: 'password123'
@@ -54,7 +54,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'login returns token with valid credentials' do
-    post '/login', params: {
+    post '/api/v1/login', params: {
       email: 'test@example.com',
       password: 'password123'
     }
@@ -68,7 +68,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'login fails with wrong password' do
-    post '/login', params: {
+    post '/api/v1/login', params: {
       email: 'test@example.com',
       password: 'wrongpassword'
     }
@@ -80,7 +80,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'login fails with non existent user' do
-    post '/login', params: {
+    post '/api/v1/login', params: {
       email: 'missing@example.com',
       password: 'password123'
     }
@@ -92,7 +92,7 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'login fails with empty credentials' do
-    post '/login', params: {
+    post '/api/v1/login', params: {
       email: '',
       password: ''
     }
