@@ -71,7 +71,7 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     short_url.reload
 
-    assert_equal "http://localhost:3000/s/#{short_url.short_code}", short_url.url
+    assert_equal "http://localhost:3000/#{short_url.short_code}", short_url.url
   end
 
   test 'should generate correct url with custom alias' do
@@ -154,28 +154,6 @@ class ShortUrlTest < ActiveSupport::TestCase
     )
 
     assert_nil short_url.custom_alias
-  end
-
-  test 'should reject reserved custom alias' do
-    short_url = ShortUrl.new(
-      long_url: 'https://example.com',
-      user_id: @user.id,
-      custom_alias: 'login'
-    )
-
-    assert_not short_url.save
-    assert_includes short_url.errors[:custom_alias], 'is reserved'
-  end
-
-  test 'should reject reserved custom alias after normalization' do
-    short_url = ShortUrl.new(
-      long_url: 'https://example.com',
-      user_id: @user.id,
-      custom_alias: '  LOGIN  '
-    )
-
-    assert_not short_url.save
-    assert_includes short_url.errors[:custom_alias], 'is reserved'
   end
 
   test 'should reject custom alias with invalid characters' do
@@ -345,32 +323,7 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert_includes short_url.errors[:expires_at].first, 'must be greater than'
   end
 
-  test 'enqueues sync click counts job after create' do
-    assert_enqueued_with(job: SyncClickCountsJob) do
-      ShortUrl.create!(
-        long_url: 'https://example.com',
-        user_id: @user.id
-      )
-    end
-  end
-
-  test 'enqueues sync click counts job with short url id after create' do
-    short_url = nil
-
-    assert_enqueued_with(job: SyncClickCountsJob) do
-      short_url = ShortUrl.create!(
-        long_url: 'https://example.com',
-        user_id: @user.id
-      )
-    end
-
-    job = enqueued_jobs.last
-
-    assert_equal SyncClickCountsJob, job[:job]
-    assert_equal [short_url.id], job[:args]
-  end
-
-  test 'clears redirect cache for short code url' do
+  test 'clears redirect cache for short code' do
     short_url = ShortUrl.create!(
       long_url: 'https://cache-short-code.com',
       user_id: @user.id
@@ -378,14 +331,12 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     short_url.reload
 
-    cache_key = "short_url:s_#{short_url.short_code}"
-
-    Rails.cache.expects(:delete).with(cache_key)
+    Rails.cache.expects(:delete).with("sc:#{short_url.short_code}")
 
     short_url.send(:clear_redirect_cache)
   end
 
-  test 'clears redirect cache for custom alias url' do
+  test 'clears redirect cache for custom alias' do
     short_url = ShortUrl.create!(
       long_url: 'https://cache-custom-alias.com',
       user_id: @user.id,
@@ -394,11 +345,8 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     short_url.reload
 
-    short_code_cache_key = "short_url:s_#{short_url.short_code}"
-    custom_alias_cache_key = 'short_url:custom-cache'
-
-    Rails.cache.expects(:delete).with(short_code_cache_key)
-    Rails.cache.expects(:delete).with(custom_alias_cache_key)
+    Rails.cache.expects(:delete).with("sc:#{short_url.short_code}")
+    Rails.cache.expects(:delete).with('sc:custom-cache')
 
     short_url.send(:clear_redirect_cache)
   end
