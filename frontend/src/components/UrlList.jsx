@@ -68,7 +68,9 @@ const UrlList = ({
 
           <div className='divide-y divide-gray-100'>
             {urls.map((url) => (
-              <UrlItem key={url.id} url={url} />
+              <div key={url.id}>
+                <UrlItem url={url} />
+              </div>
             ))}
           </div>
 

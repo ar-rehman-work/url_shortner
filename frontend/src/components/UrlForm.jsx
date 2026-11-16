@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createShortUrl } from '../api/urls'
+import { createShortUrl, BACKEND_URL } from '../api/urls'
 
 const UrlForm = ({ onSuccess }) => {
   const [url, setUrl] = useState('')
@@ -8,7 +8,7 @@ const UrlForm = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const baseUrl = 'http://localhost:3000'
+  const baseUrl = BACKEND_URL
 
   const previewUrl = useMemo(() => {
     const slug = customAlias?.trim()

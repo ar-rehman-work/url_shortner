@@ -8,10 +8,10 @@ class ShortUrl < ApplicationRecord
   scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
-  after_commit :clear_redirect_cache
+  after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
-  before_validation :check_custom_alias
+  before_validation :normalize_custom_alias
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
   validates :custom_alias,
@@ -25,23 +25,18 @@ class ShortUrl < ApplicationRecord
           presence: true,
           uniqueness: { scope: :user_id },
           format: {
-            with: /\Ahttps?:\/\/.+\..+\z/,
+            with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
             message: 'must be a valid URL'
           }
 
   BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
-  RESERVED_SHORT_CODES = %w[shorten login signup sidekiq].freeze
 
   def expired?
     expires_at.present? && expires_at <= Time.current
   end
 
   def url
-    path = if custom_alias.present?
-      custom_alias
-    else
-      "s/#{short_code}"
-    end
+    path = custom_alias.presence || short_code
 
     "#{HOST}/#{path}"
   end
@@ -53,10 +48,16 @@ class ShortUrl < ApplicationRecord
   end
 
   def clear_redirect_cache
-    SyncClickCountsJob.perform_later(id)
+    codes = [
+      short_code,
+      custom_alias,
+      *previous_changes.fetch('short_code', []),
+      *previous_changes.fetch('custom_alias', [])
+    ].compact.uniq
 
-    Rails.cache.delete("short_url:s_#{short_code}") if short_code.present?
-    Rails.cache.delete("short_url:#{custom_alias}") if custom_alias.present?
+    codes.each do |code|
+      Rails.cache.delete("sc:#{code}")
+    end
   end
 
   def encode_base62(num)
@@ -77,13 +78,9 @@ class ShortUrl < ApplicationRecord
     self.long_url = long_url.strip if long_url.present?
   end
 
-  def check_custom_alias
+  def normalize_custom_alias
     self.custom_alias = custom_alias.to_s.strip.downcase.presence
 
     return if custom_alias.blank?
-
-    if RESERVED_SHORT_CODES.include?(custom_alias)
-      errors.add(:custom_alias, 'is reserved')
-    end
   end
 end
