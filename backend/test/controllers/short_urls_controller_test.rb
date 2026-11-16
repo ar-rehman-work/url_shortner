@@ -22,7 +22,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'rejects create without authentication' do
-    post '/shorten', params: { long_url: 'https://example.com' }
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }
 
     assert_response :unauthorized
 
@@ -32,7 +32,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'creates short url successfully when authenticated' do
-    post '/shorten',
+    post '/api/v1/shorten',
          params: { long_url: 'https://example.com' },
          headers: @headers
 
@@ -41,11 +41,11 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     body = JSON.parse(response.body)
 
     assert_not_nil body['short_url']
-    assert_match(%r{\Ahttp://localhost:3000/s/[a-zA-Z0-9]+\z}, body['short_url'])
+    assert_match(%r{\Ahttp://localhost:3000/[a-zA-Z0-9]+\z}, body['short_url'])
   end
 
   test 'rejects create without long url' do
-    post '/shorten', params: {}, headers: @headers
+    post '/api/v1/shorten', params: {}, headers: @headers
 
     assert_response :bad_request
 
@@ -55,7 +55,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'rejects create with invalid long url' do
-    post '/shorten',
+    post '/api/v1/shorten',
          params: { long_url: 'invalid_url' },
          headers: @headers
 
@@ -67,10 +67,10 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'returns same short url for same long url for same user' do
-    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
     first = JSON.parse(response.body)['short_url']
 
-    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
     second = JSON.parse(response.body)['short_url']
 
     assert_response :success
@@ -89,10 +89,10 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     token2 = JwtService.encode(user_id: user2.id)
     headers2 = { 'Authorization' => "Bearer #{token2}" }
 
-    post '/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
     first_user_url = JSON.parse(response.body)['short_url']
 
-    post '/shorten', params: { long_url: 'https://example.com' }, headers: headers2
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: headers2
     second_user_url = JSON.parse(response.body)['short_url']
 
     assert_response :success
@@ -101,7 +101,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'creates short url with custom alias' do
-    post '/shorten',
+    post '/api/v1/shorten',
          params: {
            long_url: 'https://example.com',
            custom_alias: 'myalias'
@@ -115,6 +115,22 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'http://localhost:3000/myalias', body['short_url']
   end
 
+  test 'creates short url with custom http url' do
+    post '/api/v1/shorten',
+        params: { long_url: 'http://example.com' },
+        headers: @headers
+
+    assert_response :success
+  end
+
+  test 'creates short url with custom localhost url' do
+    post '/api/v1/shorten',
+        params: { long_url: 'http://localhost:3000/google' },
+        headers: @headers
+
+    assert_response :success
+  end
+
   test 'rejects duplicate custom alias' do
     ShortUrl.create!(
       user_id: @user.id,
@@ -122,7 +138,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       custom_alias: 'takenalias'
     )
 
-    post '/shorten',
+    post '/api/v1/shorten',
          params: {
            long_url: 'https://example.com',
            custom_alias: 'takenalias'
@@ -139,7 +155,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   test 'creates short url with expiration date' do
     expires_at = 2.days.from_now
 
-    post '/shorten',
+    post '/api/v1/shorten',
          params: {
            long_url: 'https://example.com',
            expires_at: expires_at
@@ -161,7 +177,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     short_url.reload
 
-    get "/s/#{short_url.short_code}"
+    get "/#{short_url.short_code}"
 
     assert_response :redirect
     assert_equal short_url.long_url, response.location
@@ -180,6 +196,31 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'https://example.com', response.location
   end
 
+  test 'caches redirect data for valid short code' do
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://example.com'
+    )
+
+    get "/#{short_url.short_code}"
+
+    assert_response :redirect
+
+    cached_data = Rails.cache.read("sc:#{short_url.short_code}")
+
+    assert_equal short_url.id, cached_data[:id]
+    assert_equal short_url.long_url, cached_data[:long_url]
+  end
+
+  test 'caches not found response for invalid short code' do
+    get '/invalidcode'
+
+    assert_response :not_found
+
+    assert_equal ShortUrlsController::NOT_FOUND,
+                Rails.cache.read('sc:invalidcode')
+  end
+
   test 'tracks click data in redis when redirecting short code' do
     short_url = ShortUrl.create!(
       user_id: @user.id,
@@ -188,7 +229,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     short_url.reload
 
-    get "/s/#{short_url.short_code}"
+    get "/#{short_url.short_code}"
 
     assert_response :redirect
 
@@ -204,7 +245,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     short_url.reload
 
-    get "/s/#{short_url.short_code}"
+    get "/#{short_url.short_code}"
 
     assert_response :redirect
 
@@ -223,7 +264,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     short_url.reload
 
     assert_enqueued_with(job: TrackClickJob) do
-      get "/s/#{short_url.short_code}"
+      get "/#{short_url.short_code}"
     end
 
     assert_response :redirect
@@ -246,7 +287,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
         nil
       ]
     ) do
-      get "/s/#{short_url.short_code}"
+      get "/#{short_url.short_code}"
     end
 
     assert_response :redirect
@@ -261,7 +302,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     short_url.reload
     short_url.update_column(:expires_at, 1.day.ago)
 
-    get "/s/#{short_url.short_code}"
+    get "/#{short_url.short_code}"
 
     assert_response :gone
 
@@ -280,14 +321,14 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     short_url.update_column(:expires_at, 1.day.ago)
 
     assert_no_enqueued_jobs only: TrackClickJob do
-      get "/s/#{short_url.short_code}"
+      get "/#{short_url.short_code}"
     end
 
     assert_response :gone
   end
 
   test 'does not track redis click data for invalid short code' do
-    get '/s/invalidcode'
+    get '/invalidcode'
 
     assert_response :not_found
 
@@ -296,7 +337,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
   test 'does not enqueue track click job for invalid short code' do
     assert_no_enqueued_jobs only: TrackClickJob do
-      get '/s/invalidcode'
+      get '/invalidcode'
     end
 
     assert_response :not_found
@@ -311,7 +352,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     short_url.reload
     short_url.update_column(:expires_at, 1.day.ago)
 
-    get "/s/#{short_url.short_code}"
+    get "/#{short_url.short_code}"
 
     assert_response :gone
 
@@ -321,7 +362,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'returns not found for invalid short code' do
-    get '/s/invalidcode'
+    get '/invalidcode'
 
     assert_response :not_found
 
@@ -338,7 +379,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       )
     end
 
-    get '/',
+    get '/api/v1/',
         params: { limit: 10 },
         headers: @headers
 
@@ -365,7 +406,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       custom_alias: 'github'
     )
 
-    get '/',
+    get '/api/v1/',
         params: { q: 'github', limit: 10 },
         headers: @headers
 
@@ -393,7 +434,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: true, limit: 10 }, headers: @headers
+    get '/api/v1/', params: { expired: true, limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -414,7 +455,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: false, limit: 10 }, headers: @headers
+    get '/api/v1/', params: { expired: false, limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -435,7 +476,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { limit: 10 }, headers: @headers
+    get '/api/v1/', params: { limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -455,7 +496,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       expires_at: 1.day.from_now
     )
 
-    get '/', params: { expired: 'invalid', limit: 10 }, headers: @headers
+    get '/api/v1/', params: { expired: 'invalid', limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -476,7 +517,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://generated.com'
     )
 
-    get '/', params: { custom: true, limit: 10 }, headers: @headers
+    get '/api/v1/', params: { custom: true, limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -499,7 +540,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://generated.com'
     )
 
-    get '/', params: { custom: false, limit: 10 }, headers: @headers
+    get '/api/v1/', params: { custom: false, limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -522,7 +563,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://generated.com'
     )
 
-    get '/', params: { limit: 10 }, headers: @headers
+    get '/api/v1/', params: { limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -543,7 +584,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://generated.com'
     )
 
-    get '/', params: { custom: 'invalid', limit: 10 }, headers: @headers
+    get '/api/v1/', params: { custom: 'invalid', limit: 10 }, headers: @headers
 
     assert_response :success
 
@@ -572,7 +613,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
       long_url: 'https://expired-generated.com'
     ).update_column(:expires_at, 1.day.ago)
 
-    get '/',
+    get '/api/v1/',
         params: { expired: true, custom: true, limit: 10 },
         headers: @headers
 
