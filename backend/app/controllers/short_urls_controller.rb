@@ -55,7 +55,17 @@ class ShortUrlsController < ApplicationController
     short_url.custom_alias = short_url_params[:custom_alias].presence
 
     if short_url.save
-      render json: { short_url: short_url.url }, status: :ok
+      short_url_data = {
+        id: short_url.id,
+        long_url: short_url.long_url,
+        short_url: short_url.url,
+        custom: short_url.custom_alias.present?,
+        expires_at: short_url.expires_at,
+        expired: short_url.expired?,
+        created_at: short_url.created_at
+      }
+
+      render json: short_url_data, status: :ok
     else
       render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
     end
