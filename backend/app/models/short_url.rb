@@ -8,10 +8,11 @@ class ShortUrl < ApplicationRecord
   scope :generated, -> { where(custom_alias: [nil, '']) }
 
   after_create :set_short_code
-  after_commit :sync_click_counts, on: [:create, :update]
+  after_commit :sync_click_counts, on: :update
   after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
+  before_validation :normalize_custom_alias
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
   validates :custom_alias,
@@ -80,5 +81,11 @@ class ShortUrl < ApplicationRecord
 
   def normalize_long_url
     self.long_url = long_url.strip if long_url.present?
+  end
+
+  def normalize_custom_alias
+    self.custom_alias = custom_alias.to_s.strip.downcase.presence
+
+    return if custom_alias.blank?
   end
 end
