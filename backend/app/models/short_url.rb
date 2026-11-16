@@ -25,7 +25,7 @@ class ShortUrl < ApplicationRecord
           presence: true,
           uniqueness: { scope: :user_id },
           format: {
-            with: /\Ahttps?:\/\/.+\..+\z/,
+            with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
             message: 'must be a valid URL'
           }
 
