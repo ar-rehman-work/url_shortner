@@ -12,7 +12,8 @@ const UrlItem = ({ url }) => {
   }
 
   return (
-    <div className='grid grid-cols-12 px-5 py-4 items-center hover:bg-gray-50 transition'>
+    <div className={`grid grid-cols-12 px-5 py-4 items-center hover:bg-gray-50 transition ${
+      url.active ? 'hover:bg-gray-50' : 'opacity-50 cursor-not-allowed pointer-events-none'}`}>
 
       <div className='col-span-5 text-sm text-gray-800 truncate pr-3'>
         {url.long_url.length > 60
@@ -20,35 +21,44 @@ const UrlItem = ({ url }) => {
           : url.long_url}
       </div>
 
-      <div className='col-span-3 text-sm'>
-        <a
-          href={url.short_url}
-          target='_blank'
-          rel='noreferrer'
-          className='text-black hover:underline'
-        >
-          {url.short_url}
-        </a>
-      </div>
-
-      <div className='col-span-2'>
-        {url.expired ? (
-          <span className='px-3 py-1 text-xs bg-red-50 text-red-600 border border-red-100 rounded-full'>
-            Expired
-          </span>
+      <div className='col-span-4 text-sm'>
+        {url.short_url ? (
+          <a
+            href={url.short_url}
+            target='_blank'
+            rel='noreferrer'
+            className='text-black hover:underline'
+          >
+            {url.short_url}
+          </a>
         ) : (
-          <span className='px-3 py-1 text-xs bg-green-50 text-green-600 border border-green-100 rounded-full'>
-            Active
+          <span className='text-red-500 text-xs font-medium'>
+            URL unavailable
           </span>
         )}
+      </div>
+
+      <div className='col-span-2 flex flex-wrap items-center gap-2'>
+        <span
+          className={`px-3 py-1 text-xs font-medium border rounded-full ${
+            !url.active
+              ? 'bg-gray-50 text-gray-500 border-gray-200'
+              : url.expired
+                ? 'bg-red-50 text-red-600 border-red-100'
+                : 'bg-green-50 text-green-600 border-green-100'
+          }`}
+        >
+          {!url.active ? 'Inactive' : url.expired ? 'Expired' : 'Active'}
+        </span>
+
         {url.custom && (
-          <span className='px-3 py-1 text-xs bg-orange-50 text-orange-600 border border-orange-100 rounded-full'>
+          <span className='px-3 py-1 text-xs font-medium bg-orange-50 text-orange-600 border border-orange-100 rounded-full'>
             Custom
           </span>
         )}
       </div>
 
-      <div className='col-span-2 flex justify-end'>
+      <div className='col-span-1 flex justify-end'>
         <button
           onClick={handleCopy}
           className='p-2 rounded-lg hover:bg-gray-100 transition relative'
