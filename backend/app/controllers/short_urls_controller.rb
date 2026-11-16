@@ -3,7 +3,7 @@ class ShortUrlsController < ApplicationController
 
   NOT_FOUND = '__not_found__'.freeze
 
-  skip_before_action :authenticate_user!, only: [:redirect_by_short_code]
+  skip_before_action :authenticate_user!, only: [:redirect]
   before_action :check_long_url, only: [:create]
 
   def index
@@ -13,7 +13,14 @@ class ShortUrlsController < ApplicationController
     when 'true', true
       filtered_urls = filtered_urls.expired
     when 'false', false
+      filtered_urls = filtered_urls.unexpired
+    end
+
+    case params[:active]
+    when 'true', true
       filtered_urls = filtered_urls.active
+    when 'false', false
+      filtered_urls = filtered_urls.inactive
     end
 
     case params[:custom]
@@ -27,7 +34,7 @@ class ShortUrlsController < ApplicationController
       query = "%#{params[:q]}%"
 
       filtered_urls = filtered_urls.where(
-        'long_url ILIKE :q OR short_code ILIKE :q OR custom_alias ILIKE :q',
+        'long_url ILIKE :q OR slug ILIKE :q',
         q: query
       )
     end
@@ -39,9 +46,11 @@ class ShortUrlsController < ApplicationController
         id: short_url.id,
         long_url: short_url.long_url,
         short_url: short_url.url,
-        custom: short_url.custom_alias.present?,
+        custom: short_url.custom,
+        active: short_url.active,
         expires_at: short_url.expires_at,
         expired: short_url.expired?,
+        updated_at: short_url.updated_at,
         created_at: short_url.created_at
       }
     end
@@ -52,16 +61,18 @@ class ShortUrlsController < ApplicationController
   def create
     short_url = ShortUrl.find_or_initialize_by(long_url: short_url_params[:long_url], user_id: current_user.id)
     short_url.expires_at = short_url_params[:expires_at].presence
-    short_url.custom_alias = short_url_params[:custom_alias].presence
+    short_url.slug = short_url_params[:custom_alias].presence
 
     if short_url.save
       short_url_data = {
         id: short_url.id,
         long_url: short_url.long_url,
         short_url: short_url.url,
-        custom: short_url.custom_alias.present?,
+        custom: short_url.custom,
+        active: short_url.active,
         expires_at: short_url.expires_at,
         expired: short_url.expired?,
+        updated_at: short_url.updated_at,
         created_at: short_url.created_at
       }
 
@@ -71,16 +82,16 @@ class ShortUrlsController < ApplicationController
     end
   end
 
-  def redirect_by_short_code
-    short_code = params[:short_code]
-    cache_key = "sc:#{short_code}"
+  def redirect
+    slug = params[:slug]
+    cache_key = "sc:#{slug}"
     cached_data = Rails.cache.read(cache_key)
 
     redirect_data =
       if cached_data.present?
         cached_data
       else
-        short_url = ShortUrl.find_by('custom_alias = :code OR short_code = :code', code: short_code)
+        short_url = ShortUrl.find_by(slug: slug)
 
         data = NOT_FOUND
         expiry = 1.minute
