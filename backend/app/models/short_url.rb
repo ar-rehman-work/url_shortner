@@ -80,7 +80,7 @@ class ShortUrl < ApplicationRecord
   end
 
   def normalize_slug
-    self.slug = slug.to_s.strip.downcase.presence
+    self.slug = slug.to_s.strip.presence
   end
 
   def set_custom_flag
