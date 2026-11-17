@@ -25,5 +25,5 @@ Rails.application.routes.draw do
   end
 
   # Short URL redirects
-  get '/:short_code', to: 'short_urls#redirect', constraints: { short_code: /[a-zA-Z0-9_-]+/ }
+  get '/:slug', to: 'short_urls#redirect', constraints: { short_code: /[a-zA-Z0-9_-]+/ }
 end
