@@ -68,7 +68,7 @@ class ShortUrl < ApplicationRecord
     encoded = ''
 
     while num > 0
-      encoded << BASE62[num % base]
+      encoded += BASE62[num % base]
       num /= base
     end
 
