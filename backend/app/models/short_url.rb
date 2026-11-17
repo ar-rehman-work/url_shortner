@@ -32,7 +32,7 @@ class ShortUrl < ApplicationRecord
             message: 'must be a valid URL'
           }
 
-  BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
+  BASE62 = 'ilTg5vJrIkZqOaFnMbXcVtYp3HsDuG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
 
   def expired?
     expires_at.present? && expires_at <= Time.current

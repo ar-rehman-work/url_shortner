@@ -60,8 +60,8 @@ class ShortUrlsController < ApplicationController
 
   def create
     short_url = ShortUrl.find_or_initialize_by(long_url: short_url_params[:long_url], user_id: current_user.id)
-    short_url.expires_at = short_url_params[:expires_at].presence
-    short_url.slug = short_url_params[:custom_alias].presence
+    short_url.expires_at = short_url_params[:expires_at] if short_url_params.key?(:expires_at)
+    short_url.slug = short_url_params[:custom_alias] if short_url_params.key?(:custom_alias)
 
     if short_url.save
       short_url_data = {
