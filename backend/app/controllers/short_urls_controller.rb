@@ -91,7 +91,7 @@ class ShortUrlsController < ApplicationController
       if cached_data.present?
         cached_data
       else
-        short_url = ShortUrl.find_by(slug: slug)
+        short_url = ShortUrl.find_by(slug: slug, active: true)
 
         data = NOT_FOUND
         expiry = 1.minute
