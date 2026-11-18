@@ -20,6 +20,7 @@ Rails.application.routes.draw do
 
     root 'short_urls#index'
     post '/shorten', to: 'short_urls#create'
+    put '/shorten/:id', to: 'short_urls#update'
 
     get '/up', to: 'rails/health#show', as: :rails_health_check
   end

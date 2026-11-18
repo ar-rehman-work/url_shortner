@@ -14,7 +14,8 @@ class ShortUrl < ApplicationRecord
 
   before_validation :normalize_long_url
   before_validation :normalize_slug
-  before_validation :set_custom_flag, on: :create
+  before_validation :set_custom_flag
+  before_validation :restore_generated_slug
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
   validates :slug,
@@ -85,5 +86,9 @@ class ShortUrl < ApplicationRecord
 
   def set_custom_flag
     self.custom = slug.present?
+  end
+
+  def restore_generated_slug
+    self.slug = short_code if slug.blank? && short_code.present?
   end
 end
