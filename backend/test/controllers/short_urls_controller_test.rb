@@ -69,16 +69,18 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert body['errors'].any?
   end
 
-  test 'returns same short url for same long url for same user' do
+  test 'rejects duplicate long url for the same user' do
     post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
-    first = JSON.parse(response.body)['short_url']
-
-    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
-    second = JSON.parse(response.body)['short_url']
 
     assert_response :success
 
-    assert_equal first, second
+    post '/api/v1/shorten', params: { long_url: 'https://example.com' }, headers: @headers
+
+    assert_response :unprocessable_entity
+
+    body = JSON.parse(response.body)
+
+    assert body['errors'].any?
     assert_equal 1, @user.short_urls.count
   end
 
@@ -181,6 +183,219 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_not_nil short_url.expires_at
   end
 
+  test 'does not modify short url when update validation fails' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com',
+      slug: 'original-alias'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'invalid alias!' },
+        headers: @headers
+
+    assert_response :unprocessable_entity
+
+    short_url.reload
+
+    assert_equal 'original-alias', short_url.slug
+    assert_equal true, short_url.custom
+  end
+
+  # UPDATE
+
+  test 'rejects update without authentication' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'new-alias' }
+
+    assert_response :unauthorized
+  end
+
+  test 'updates custom alias successfully' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com',
+      slug: 'old-alias'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'new-alias' },
+        headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal 'http://localhost:3000/new-alias', body['short_url']
+    assert_equal true, body['custom']
+
+    short_url.reload
+
+    assert_equal 'new-alias', short_url.slug
+    assert_equal true, short_url.custom
+  end
+
+  test 'updates generated slug to custom alias' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'MyAlias' },
+        headers: @headers
+
+    assert_response :success
+
+    short_url.reload
+
+    assert_equal 'MyAlias', short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert_equal true, short_url.custom
+  end
+
+  test 'restores generated slug when custom alias is removed' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com',
+      slug: 'myalias'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: '' },
+        headers: @headers
+
+    assert_response :success
+
+    body = JSON.parse(response.body)
+
+    assert_equal "http://localhost:3000/#{original_short_code}", body['short_url']
+    assert_equal false, body['custom']
+
+    short_url.reload
+
+    assert_equal original_short_code, short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert_equal false, short_url.custom
+  end
+
+  test 'rejects update with an already taken custom alias' do
+    ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://first.com',
+      slug: 'taken-alias'
+    )
+
+    short_url = ShortUrl.create!(
+      user_id: @user.id,
+      long_url: 'https://second.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'taken-alias' },
+        headers: @headers
+
+    assert_response :unprocessable_entity
+
+    body = JSON.parse(response.body)
+
+    assert body['errors'].any?
+  end
+
+  test 'rejects update with invalid custom alias' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'invalid alias!' },
+        headers: @headers
+
+    assert_response :unprocessable_entity
+  end
+
+  test 'updates expiration date' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    expires_at = 2.days.from_now
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { expires_at: expires_at },
+        headers: @headers
+
+    assert_response :success
+
+    short_url.reload
+
+    assert_in_delta expires_at.to_i, short_url.expires_at.to_i, 1
+  end
+
+  test 'updates long url' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { long_url: 'https://github.com' },
+        headers: @headers
+
+    assert_response :success
+
+    short_url.reload
+
+    assert_equal 'https://github.com', short_url.long_url
+  end
+
+  test 'rejects update with invalid long url' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { long_url: 'invalid-url' },
+        headers: @headers
+
+    assert_response :unprocessable_entity
+  end
+
+  test 'does not allow updating another user short url' do
+    other_user = User.create!(
+      name: 'Other User',
+      email: 'other@example.com',
+      password: 'password123'
+    )
+
+    short_url = other_user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'new-alias' },
+        headers: @headers
+
+    assert_response :not_found
+
+    short_url.reload
+
+    assert_equal short_url.short_code, short_url.slug
+  end
+
+  test 'returns not found when updating nonexistent short url' do
+    put '/api/v1/shorten/999999',
+        params: { custom_alias: 'new-alias' },
+        headers: @headers
+
+    assert_response :not_found
+  end
+
   # REDIRECT
 
   test 'redirects using generated slug' do
@@ -275,12 +490,15 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     )
 
     old_slug = short_url.slug
+    new_slug = 'new-alias'
 
     Rails.cache.write("sc:#{old_slug}", { id: short_url.id })
-    short_url.update!(slug: 'new-alias')
+    Rails.cache.write("sc:#{new_slug}", { id: short_url.id })
+
+    short_url.update!(slug: new_slug)
 
     assert_not Rails.cache.exist?("sc:#{old_slug}")
-    assert_not Rails.cache.exist?("sc:new-alias")
+    assert_not Rails.cache.exist?("sc:#{new_slug}")
   end
 
   # CLICK TRACKING
