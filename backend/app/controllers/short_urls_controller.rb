@@ -42,41 +42,35 @@ class ShortUrlsController < ApplicationController
     @pagy, short_urls = pagy(filtered_urls.order(created_at: :desc), items: params[:limit].to_i)
 
     short_urls = short_urls.map do |short_url|
-      {
-        id: short_url.id,
-        long_url: short_url.long_url,
-        short_url: short_url.url,
-        custom: short_url.custom,
-        active: short_url.active,
-        expires_at: short_url.expires_at,
-        expired: short_url.expired?,
-        updated_at: short_url.updated_at,
-        created_at: short_url.created_at
-      }
+      short_url_response(short_url)
     end
 
     render json: { data: short_urls, pagination: @pagy.data_hash }
   end
 
   def create
-    short_url = ShortUrl.find_or_initialize_by(long_url: short_url_params[:long_url], user_id: current_user.id)
+    short_url = current_user.short_urls.build(
+      long_url: short_url_params[:long_url],
+      expires_at: short_url_params[:expires_at],
+      slug: short_url_params[:custom_alias]
+    )
+
+    if short_url.save
+      render json: short_url_response(short_url), status: :created
+    else
+      render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  def update
+    short_url = current_user.short_urls.find(params[:id])
+
+    short_url.long_url = short_url_params[:long_url] if short_url_params.key?(:long_url)
     short_url.expires_at = short_url_params[:expires_at] if short_url_params.key?(:expires_at)
     short_url.slug = short_url_params[:custom_alias] if short_url_params.key?(:custom_alias)
 
     if short_url.save
-      short_url_data = {
-        id: short_url.id,
-        long_url: short_url.long_url,
-        short_url: short_url.url,
-        custom: short_url.custom,
-        active: short_url.active,
-        expires_at: short_url.expires_at,
-        expired: short_url.expired?,
-        updated_at: short_url.updated_at,
-        created_at: short_url.created_at
-      }
-
-      render json: short_url_data, status: :ok
+      render json: short_url_response(short_url), status: :ok
     else
       render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
     end
@@ -145,5 +139,19 @@ class ShortUrlsController < ApplicationController
     )
 
     redirect_to redirect_data[:long_url], allow_other_host: true
+  end
+
+  def short_url_response(short_url)
+    {
+      id: short_url.id,
+      long_url: short_url.long_url,
+      short_url: short_url.url,
+      custom: short_url.custom,
+      active: short_url.active,
+      expires_at: short_url.expires_at,
+      expired: short_url.expired?,
+      updated_at: short_url.updated_at,
+      created_at: short_url.created_at
+    }
   end
 end
