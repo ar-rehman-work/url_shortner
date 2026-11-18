@@ -147,6 +147,7 @@ class ShortUrlsController < ApplicationController
       long_url: short_url.long_url,
       short_url: short_url.url,
       custom: short_url.custom,
+      slug: short_url.slug,
       active: short_url.active,
       expires_at: short_url.expires_at,
       expired: short_url.expired?,
