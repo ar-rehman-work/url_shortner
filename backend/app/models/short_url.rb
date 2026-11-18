@@ -22,8 +22,8 @@ class ShortUrl < ApplicationRecord
           allow_nil: true,
           uniqueness: true,
           format: {
-            with: /\A[a-zA-Z0-9_-]+\z/,
-            message: 'must be a valid path'
+            with: /\A[a-zA-Z0-9]+\z/,
+            message: 'can only contain letters and numbers'
           }
   validates :long_url,
           presence: true,
