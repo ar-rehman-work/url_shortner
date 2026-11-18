@@ -87,8 +87,11 @@ class ShortUrlTest < ActiveSupport::TestCase
       slug: 'myalias'
     )
 
+    short_url.reload
+
     assert_equal 'http://localhost:3000/myalias', short_url.url
-    assert_equal short_url.short_code, short_url.short_code
+    assert_not_nil short_url.short_code
+    assert_equal 'myalias', short_url.slug
     assert short_url.custom
   end
 
@@ -176,15 +179,71 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert short_url.custom
   end
 
-  test 'should set blank slug to nil' do
+  test 'should set slug with short code when blank slug is provided on creation' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
       slug: '   '
     )
 
-    assert_equal false, short_url.custom
-    assert_not_nil short_url.slug
+    short_url.reload
+
+    assert_not_nil short_url.short_code
+    assert_equal short_url.short_code, short_url.slug
+    assert_not short_url.custom
+  end
+
+  test 'should change existing custom alias to another custom alias' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: 'old-alias'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: 'new-alias')
+    short_url.reload
+
+    assert_equal 'new-alias', short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert short_url.custom
+  end
+
+  test 'should change generated slug to custom alias' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: 'MyAlias')
+    short_url.reload
+
+    assert_equal 'MyAlias', short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert short_url.custom
+  end
+
+  test 'should restore generated slug when custom alias is removed' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: 'myalias'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: '')
+    short_url.reload
+
+    assert_equal original_short_code, short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert_not short_url.custom
   end
 
   test 'should reject custom slug with invalid characters' do
