@@ -197,16 +197,16 @@ class ShortUrlTest < ActiveSupport::TestCase
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
-      slug: 'old-alias'
+      slug: 'oldalias'
     )
 
     short_url.reload
     original_short_code = short_url.short_code
 
-    short_url.update!(slug: 'new-alias')
+    short_url.update!(slug: 'newalias')
     short_url.reload
 
-    assert_equal 'new-alias', short_url.slug
+    assert_equal 'newalias', short_url.slug
     assert_equal original_short_code, short_url.short_code
     assert short_url.custom
   end
@@ -254,14 +254,14 @@ class ShortUrlTest < ActiveSupport::TestCase
     )
 
     assert_not short_url.save
-    assert_includes short_url.errors[:slug], 'must be a valid path'
+    assert_includes short_url.errors[:slug], 'can only contain letters and numbers'
   end
 
   test 'should allow valid custom slug characters' do
     short_url = ShortUrl.new(
       long_url: 'https://example.com',
       user_id: @user.id,
-      slug: 'my_alias-123'
+      slug: 'myalias123'
     )
 
     assert short_url.valid?
@@ -408,7 +408,7 @@ class ShortUrlTest < ActiveSupport::TestCase
     custom_url = ShortUrl.create!(
       long_url: 'https://custom-scope.com',
       user_id: @user.id,
-      slug: 'custom-scope-path'
+      slug: 'customscopepath'
     )
 
     generated_url = ShortUrl.create!(
@@ -426,7 +426,7 @@ class ShortUrlTest < ActiveSupport::TestCase
     custom_url = ShortUrl.create!(
       long_url: 'https://custom-generated-scope.com',
       user_id: @user.id,
-      slug: 'generated-scope-path'
+      slug: 'generated'
     )
 
     generated_url = ShortUrl.create!(
@@ -468,12 +468,12 @@ class ShortUrlTest < ActiveSupport::TestCase
     short_url = ShortUrl.create!(
       long_url: 'https://cache-custom.com',
       user_id: @user.id,
-      slug: 'custom-cache'
+      slug: 'customcache'
     )
 
     short_url.reload
 
-    Rails.cache.expects(:delete).with('sc:custom-cache')
+    Rails.cache.expects(:delete).with('sc:customcache')
 
     short_url.send(:clear_redirect_cache)
   end
@@ -482,13 +482,13 @@ class ShortUrlTest < ActiveSupport::TestCase
     short_url = ShortUrl.create!(
       long_url: 'https://cache-update.com',
       user_id: @user.id,
-      slug: 'old-slug'
+      slug: 'oldslug'
     )
 
-    short_url.update!(slug: 'new-slug')
+    short_url.update!(slug: 'newslug')
 
-    Rails.cache.expects(:delete).with('sc:old-slug')
-    Rails.cache.expects(:delete).with('sc:new-slug')
+    Rails.cache.expects(:delete).with('sc:oldslug')
+    Rails.cache.expects(:delete).with('sc:newslug')
 
     short_url.send(:clear_redirect_cache)
   end
