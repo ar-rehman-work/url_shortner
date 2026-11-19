@@ -10,7 +10,9 @@ import UrlCard from './UrlCard'
 const UrlsContent = () => {
   const [shortUrls, setShortUrls] = useState([])
   const [shortUrl, setShortUrl] = useState()
+  const [editingUrl, setEditingUrl] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [isUrlModalOpen, setIsUrlModalOpen] = useState(false)
 
   const query = useMemo(() => {
     return Object.fromEntries([...searchParams])
@@ -35,6 +37,13 @@ const UrlsContent = () => {
     setShortUrl(data)
   }
 
+  const updateShortUrl = (data) => {
+    setShortUrls((prev) =>
+      prev.map((url) => url.id === data.id ? data : url)
+    )
+    setShortUrl(data)
+  }
+
   const onFilterChange = (key, value) => {
     const params = new URLSearchParams(searchParams)
 
@@ -46,7 +55,25 @@ const UrlsContent = () => {
 
   return (
     <div className='space-y-4'>
-      <UrlForm onSuccess={addShortUrl} />
+     <div className='flex justify-end'>
+        <button
+          type='button'
+          onClick={() => setIsUrlModalOpen(true)}
+          className='bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-900 transition'
+        >
+          + New
+        </button>
+      </div>
+
+      <UrlForm
+        isOpen={isUrlModalOpen || Boolean(editingUrl)}
+        onClose={() => {
+          setIsUrlModalOpen(false)
+          setEditingUrl(null)
+        }}
+        onSuccess={editingUrl ? updateShortUrl : addShortUrl}
+        shortUrl={editingUrl}
+      />
 
       { shortUrl && <UrlCard shortUrl={shortUrl} /> }
 
@@ -56,6 +83,7 @@ const UrlsContent = () => {
         onFilterChange={onFilterChange}
         searchParams={searchParams}
         setSearchParams={setSearchParams}
+        onEdit={(url) => setEditingUrl(url)}
       />
 
     </div>

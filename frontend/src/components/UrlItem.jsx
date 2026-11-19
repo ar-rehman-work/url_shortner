@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Copy } from 'lucide-react'
+import { Copy, Pencil } from 'lucide-react'
 
-const UrlItem = ({ url }) => {
+const UrlItem = ({ url, onEdit }) => {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -58,10 +58,21 @@ const UrlItem = ({ url }) => {
         )}
       </div>
 
-      <div className='col-span-1 flex justify-end'>
+      <div className='col-span-1 flex justify-end gap-2'>
         <button
+          type='button'
+          onClick={() => onEdit(url)}
+          className='p-2 rounded-lg hover:bg-gray-100 transition'
+          title='Edit URL'
+        >
+          <Pencil size={16} className='text-gray-600' />
+        </button>
+
+        <button
+          type='button'
           onClick={handleCopy}
           className='p-2 rounded-lg hover:bg-gray-100 transition relative'
+          title='Copy URL'
         >
           <Copy size={16} className='text-gray-600' />
 

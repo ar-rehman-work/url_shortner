@@ -3,7 +3,8 @@ import UrlItem from './UrlItem'
 const UrlList = ({
   urls,
   filters,
-  onFilterChange
+  onFilterChange,
+  onEdit
 }) => {
   return (
     <div className='space-y-5'>
@@ -69,7 +70,7 @@ const UrlList = ({
           <div className='divide-y divide-gray-100'>
             {urls.map((url) => (
               <div key={url.id}>
-                <UrlItem url={url} />
+                <UrlItem url={url} onEdit={onEdit} />
               </div>
             ))}
           </div>

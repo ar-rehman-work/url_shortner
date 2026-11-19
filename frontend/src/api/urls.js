@@ -26,8 +26,11 @@ export const loginUser = async payload => {
   return data
 }
 
-export const createShortUrl = async payload => {
-  const { data } = await api.post('/shorten', payload)
+export const shortenUrl = async (payload, id = null) => {
+  const { data } = id
+    ? await api.put(`/shorten/${id}`, payload)
+    : await api.post('/shorten', payload)
+
   return data
 }
 
