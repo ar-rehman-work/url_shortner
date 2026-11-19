@@ -1,26 +1,44 @@
-import { useMemo, useState } from 'react'
-import { createShortUrl, BACKEND_URL } from '../api/urls'
+import { useEffect, useMemo, useState } from 'react'
+import { shortenUrl, BACKEND_URL } from '../api/urls'
 
-const UrlForm = ({ onSuccess }) => {
+const UrlForm = ({ isOpen, onClose, onSuccess, shortUrl }) => {
   const [url, setUrl] = useState('')
   const [customAlias, setCustomAlias] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const isEditing = Boolean(shortUrl)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    setUrl(shortUrl?.long_url || '')
+    setCustomAlias(shortUrl?.custom ? shortUrl.slug || '' : '')
+    setExpiresAt(
+      shortUrl?.expires_at
+        ? new Date(new Date(shortUrl.expires_at).getTime() - new Date(shortUrl.expires_at).getTimezoneOffset() * 60000)
+            .toISOString()
+            .slice(0, 16)
+        : ''
+    )
+    setError('')
+  }, [isOpen, shortUrl])
+
   const baseUrl = BACKEND_URL
 
   const previewUrl = useMemo(() => {
-    const slug = customAlias?.trim()
+    const slug = customAlias.trim() || shortUrl?.slug
+
     return slug
       ? `${baseUrl}/${slug}`
       : `${baseUrl}/xxxxx`
-  }, [customAlias, url])
+  }, [baseUrl, customAlias, shortUrl])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!url) return
+    if (!url.trim()) return
 
     setLoading(true)
     setError('')
@@ -28,81 +46,103 @@ const UrlForm = ({ onSuccess }) => {
     try {
       const payload = {
         long_url: url,
-        custom_alias: customAlias || undefined,
-        expires_at: expiresAt || undefined
+        custom_alias: customAlias,
+        expires_at: expiresAt || null
       }
 
-      const data = await createShortUrl(payload)
+      const data = await shortenUrl(payload, shortUrl?.id)
 
       onSuccess(data)
 
-      setUrl('')
-      setCustomAlias('')
-      setExpiresAt('')
-    } catch (error) {
-      setError('URL shortening failed. Please enter valid data.')
-    }
+      if (!isEditing) {
+        setUrl('')
+        setCustomAlias('')
+        setExpiresAt('')
+      }
 
-    setLoading(false)
+      onClose()
+    } catch (error) {
+      setError(error.response?.data?.errors?.join(', ') || error.response?.data?.error || 'URL operation failed. Please check your input.')
+    } finally {
+      setLoading(false)
+    }
   }
 
+  if (!isOpen) return null
+
   return (
-    <div className='bg-white border border-gray-200 rounded-2xl shadow-sm p-6 space-y-5'>
+    <div
+      className='fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
+      onClick={onClose}
+    >
+      <div
+        className='w-full max-w-lg bg-white rounded-2xl shadow-xl p-6 space-y-5'
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className='flex items-center justify-between'>
+          <div>
+            <h2 className='text-lg font-semibold text-gray-800'>
+              {isEditing ? 'Edit short URL' : 'Shorten a long URL'}
+            </h2>
+            <p className='text-sm text-gray-500'>
+              Customize your link and set expiration if needed
+            </p>
+          </div>
 
-      <div>
-        <h2 className='text-lg font-semibold text-gray-800'>
-          Shorten a long URL
-        </h2>
-        <p className='text-sm text-gray-500'>
-          Customize your link and set expiration if needed
-        </p>
+          <button
+            type='button'
+            onClick={onClose}
+            className='text-gray-500 hover:text-black text-xl'
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className='space-y-4'>
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder='https://example.com/very/long/url'
+            className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
+          />
+
+          <input
+            value={customAlias}
+            onChange={(e) => setCustomAlias(e.target.value)}
+            placeholder='custom-alias (optional)'
+            className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
+          />
+
+          <input
+            type='datetime-local'
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+            className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
+          />
+
+          <div className='bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm'>
+            <p className='text-xs text-gray-500 mb-1'>Preview</p>
+            <p className='font-mono text-black break-all'>
+              {previewUrl}
+            </p>
+          </div>
+
+          {error && (
+            <div className='bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded-lg'>
+              {error}
+            </div>
+          )}
+
+          <button
+            disabled={loading}
+            className='w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-900 transition disabled:opacity-50'
+          >
+            {loading
+              ? isEditing ? 'Updating...' : 'Shortening...'
+              : isEditing ? 'Update short link' : 'Generate short link'}
+          </button>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className='space-y-4'>
-
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder='https://example.com/very/long/url'
-          className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
-        />
-
-        <input
-          value={customAlias}
-          onChange={(e) => setCustomAlias(e.target.value)}
-          placeholder='custom-alias (optional)'
-          className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
-        />
-
-        <input
-          type='datetime-local'
-          value={expiresAt}
-          onChange={(e) => setExpiresAt(e.target.value)}
-          className='w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-black'
-        />
-
-        <div className='bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm'>
-          <p className='text-xs text-gray-500 mb-1'>Preview</p>
-          <p className='font-mono text-black break-all'>
-            {previewUrl}
-          </p>
-        </div>
-
-        <button
-          disabled={loading}
-          className='w-full bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-900 transition disabled:opacity-50'
-        >
-          {loading ? 'Shortening...' : 'Generate short link'}
-        </button>
-
-      </form>
-
-      {error && (
-        <div className='bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded-lg'>
-          {error}
-        </div>
-      )}
-
     </div>
   )
 }
