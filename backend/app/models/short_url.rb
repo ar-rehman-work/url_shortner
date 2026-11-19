@@ -18,13 +18,13 @@ class ShortUrl < ApplicationRecord
   before_validation :restore_generated_slug
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
+  validates :slug, allow_nil: true, uniqueness: true
   validates :slug,
-          allow_nil: true,
-          uniqueness: true,
           format: {
-            with: /\A[a-zA-Z0-9]+\z/,
-            message: 'can only contain letters and numbers'
-          }
+            with: /\A[a-zA-Z0-9_-]*[-_][a-zA-Z0-9_-]*\z/,
+            message: 'must include at least one hyphen (-) or underscore (_)'
+          },
+          if: :custom?
   validates :long_url,
           presence: true,
           uniqueness: { scope: :user_id },
@@ -85,7 +85,7 @@ class ShortUrl < ApplicationRecord
   end
 
   def set_custom_flag
-    self.custom = slug.present?
+    self.custom = slug.present? if will_save_change_to_slug?
   end
 
   def restore_generated_slug

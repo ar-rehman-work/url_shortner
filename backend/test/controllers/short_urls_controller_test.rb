@@ -113,7 +113,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     post '/api/v1/shorten',
          params: {
            long_url: 'https://example.com',
-           custom_alias: 'myalias'
+           custom_alias: 'my-alias'
          },
          headers: @headers
 
@@ -121,12 +121,27 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
 
     body = JSON.parse(response.body)
 
-    assert_equal 'http://localhost:3000/myalias', body['short_url']
+    assert_equal 'http://localhost:3000/my-alias', body['short_url']
 
     short_url = @user.short_urls.last
 
-    assert_equal 'myalias', short_url.slug
+    assert_equal 'my-alias', short_url.slug
     assert_equal true, short_url.custom
+  end
+
+  test 'rejects create with custom alias without hyphen or underscore' do
+    post '/api/v1/shorten',
+         params: {
+           long_url: 'https://example.com',
+           custom_alias: 'myalias'
+         },
+         headers: @headers
+
+    assert_response :unprocessable_entity
+
+    body = JSON.parse(response.body)
+
+    assert body['errors'].any?
   end
 
   test 'creates short url with custom http url' do
@@ -149,13 +164,13 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     ShortUrl.create!(
       user_id: @user.id,
       long_url: 'https://google.com',
-      slug: 'takenalias'
+      slug: 'taken-alias'
     )
 
     post '/api/v1/shorten',
          params: {
            long_url: 'https://example.com',
-           custom_alias: 'takenalias'
+           custom_alias: 'taken-alias'
          },
          headers: @headers
 
@@ -246,14 +261,14 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     original_short_code = short_url.short_code
 
     put "/api/v1/shorten/#{short_url.id}",
-        params: { custom_alias: 'MyAlias' },
+        params: { custom_alias: 'My-Alias' },
         headers: @headers
 
     assert_response :success
 
     short_url.reload
 
-    assert_equal 'MyAlias', short_url.slug
+    assert_equal 'My-Alias', short_url.slug
     assert_equal original_short_code, short_url.short_code
     assert_equal true, short_url.custom
   end
@@ -261,7 +276,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   test 'restores generated slug when custom alias is removed' do
     short_url = @user.short_urls.create!(
       long_url: 'https://example.com',
-      slug: 'myalias'
+      slug: 'my-alias'
     )
 
     short_url.reload
@@ -318,6 +333,23 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
         headers: @headers
 
     assert_response :unprocessable_entity
+  end
+
+  test 'rejects update with custom alias without hyphen or underscore' do
+    short_url = @user.short_urls.create!(
+      long_url: 'https://example.com'
+    )
+
+    put "/api/v1/shorten/#{short_url.id}",
+        params: { custom_alias: 'myalias' },
+        headers: @headers
+
+    assert_response :unprocessable_entity
+
+    short_url.reload
+
+    assert_equal short_url.short_code, short_url.slug
+    assert_equal false, short_url.custom
   end
 
   test 'updates expiration date' do
@@ -416,7 +448,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     short_url = ShortUrl.create!(
       user_id: @user.id,
       long_url: 'https://example.com',
-      slug: 'github'
+      slug: 'git-hub'
     )
 
     get "/#{short_url.slug}"
@@ -721,13 +753,13 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     ShortUrl.create!(
       user_id: @user.id,
       long_url: 'https://google.com',
-      slug: 'google'
+      slug: 'goo-gle'
     )
 
     ShortUrl.create!(
       user_id: @user.id,
       long_url: 'https://github.com',
-      slug: 'github'
+      slug: 'git-hub'
     )
 
     get '/api/v1/',
@@ -741,7 +773,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, body['data'].length
     assert_equal 'https://github.com', body['data'][0]['long_url']
     assert_equal true, body['data'][0]['custom']
-    assert_equal 'http://localhost:3000/github', body['data'][0]['short_url']
+    assert_equal 'http://localhost:3000/git-hub', body['data'][0]['short_url']
   end
 
   test 'filters expired urls when expired=true' do
