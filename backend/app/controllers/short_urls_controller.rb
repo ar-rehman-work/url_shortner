@@ -3,7 +3,7 @@ class ShortUrlsController < ApplicationController
 
   NOT_FOUND = '__not_found__'.freeze
 
-  skip_before_action :authenticate_user!, only: [:redirect_by_short_code]
+  skip_before_action :authenticate_user!, only: [:redirect]
   before_action :check_long_url, only: [:create]
 
   def index
@@ -13,7 +13,14 @@ class ShortUrlsController < ApplicationController
     when 'true', true
       filtered_urls = filtered_urls.expired
     when 'false', false
+      filtered_urls = filtered_urls.unexpired
+    end
+
+    case params[:active]
+    when 'true', true
       filtered_urls = filtered_urls.active
+    when 'false', false
+      filtered_urls = filtered_urls.inactive
     end
 
     case params[:custom]
@@ -27,7 +34,7 @@ class ShortUrlsController < ApplicationController
       query = "%#{params[:q]}%"
 
       filtered_urls = filtered_urls.where(
-        'long_url ILIKE :q OR short_code ILIKE :q OR custom_alias ILIKE :q',
+        'long_url ILIKE :q OR slug ILIKE :q',
         q: query
       )
     end
@@ -35,52 +42,50 @@ class ShortUrlsController < ApplicationController
     @pagy, short_urls = pagy(filtered_urls.order(created_at: :desc), items: params[:limit].to_i)
 
     short_urls = short_urls.map do |short_url|
-      {
-        id: short_url.id,
-        long_url: short_url.long_url,
-        short_url: short_url.url,
-        custom: short_url.custom_alias.present?,
-        expires_at: short_url.expires_at,
-        expired: short_url.expired?,
-        created_at: short_url.created_at
-      }
+      short_url_response(short_url)
     end
 
     render json: { data: short_urls, pagination: @pagy.data_hash }
   end
 
   def create
-    short_url = ShortUrl.find_or_initialize_by(long_url: short_url_params[:long_url], user_id: current_user.id)
-    short_url.expires_at = short_url_params[:expires_at].presence
-    short_url.custom_alias = short_url_params[:custom_alias].presence
+    short_url = current_user.short_urls.build(
+      long_url: short_url_params[:long_url],
+      expires_at: short_url_params[:expires_at],
+      slug: short_url_params[:custom_alias]
+    )
 
     if short_url.save
-      short_url_data = {
-        id: short_url.id,
-        long_url: short_url.long_url,
-        short_url: short_url.url,
-        custom: short_url.custom_alias.present?,
-        expires_at: short_url.expires_at,
-        expired: short_url.expired?,
-        created_at: short_url.created_at
-      }
-
-      render json: short_url_data, status: :ok
+      render json: short_url_response(short_url), status: :created
     else
       render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
-  def redirect_by_short_code
-    short_code = params[:short_code]
-    cache_key = "sc:#{short_code}"
+  def update
+    short_url = current_user.short_urls.find(params[:id])
+
+    short_url.long_url = short_url_params[:long_url] if short_url_params.key?(:long_url)
+    short_url.expires_at = short_url_params[:expires_at] if short_url_params.key?(:expires_at)
+    short_url.slug = short_url_params[:custom_alias] if short_url_params.key?(:custom_alias)
+
+    if short_url.save
+      render json: short_url_response(short_url), status: :ok
+    else
+      render json: { errors: short_url.errors.full_messages }, status: :unprocessable_entity
+    end
+  end
+
+  def redirect
+    slug = params[:slug]
+    cache_key = "sc:#{slug}"
     cached_data = Rails.cache.read(cache_key)
 
     redirect_data =
       if cached_data.present?
         cached_data
       else
-        short_url = ShortUrl.find_by('custom_alias = :code OR short_code = :code', code: short_code)
+        short_url = ShortUrl.find_by(slug: slug, active: true)
 
         data = NOT_FOUND
         expiry = 1.minute
@@ -134,5 +139,20 @@ class ShortUrlsController < ApplicationController
     )
 
     redirect_to redirect_data[:long_url], allow_other_host: true
+  end
+
+  def short_url_response(short_url)
+    {
+      id: short_url.id,
+      long_url: short_url.long_url,
+      short_url: short_url.url,
+      custom: short_url.custom,
+      slug: short_url.slug,
+      active: short_url.active,
+      expires_at: short_url.expires_at,
+      expired: short_url.expired?,
+      updated_at: short_url.updated_at,
+      created_at: short_url.created_at
+    }
   end
 end

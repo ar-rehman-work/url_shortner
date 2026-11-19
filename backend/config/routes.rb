@@ -20,10 +20,11 @@ Rails.application.routes.draw do
 
     root 'short_urls#index'
     post '/shorten', to: 'short_urls#create'
+    put '/shorten/:id', to: 'short_urls#update'
 
     get '/up', to: 'rails/health#show', as: :rails_health_check
   end
 
   # Short URL redirects
-  get '/:short_code', to: 'short_urls#redirect_by_short_code', constraints: { short_code: /[a-zA-Z0-9_-]+/ }
+  get '/:slug', to: 'short_urls#redirect', constraints: { short_code: /[a-zA-Z0-9_-]+/ }
 end

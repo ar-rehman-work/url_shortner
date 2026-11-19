@@ -3,24 +3,28 @@ class ShortUrl < ApplicationRecord
   has_many :click_events, dependent: :destroy
 
   scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
-  scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
-  scope :custom, -> { where.not(custom_alias: [nil, '']) }
-  scope :generated, -> { where(custom_alias: [nil, '']) }
+  scope :unexpired, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
+  scope :custom, -> { where(custom: true) }
+  scope :generated, -> { where(custom: false) }
+  scope :active, -> { where(active: true) }
+  scope :inactive, -> { where(active: false) }
 
   after_create :set_short_code
   after_commit :clear_redirect_cache, on: [:create, :update, :destroy]
 
   before_validation :normalize_long_url
-  before_validation :normalize_custom_alias
+  before_validation :normalize_slug
+  before_validation :set_custom_flag
+  before_validation :restore_generated_slug
 
   validates :expires_at, comparison: { greater_than: -> { Time.current } }, allow_nil: true
-  validates :custom_alias,
-          allow_nil: true,
-          uniqueness: true,
+  validates :slug, allow_nil: true, uniqueness: true
+  validates :slug,
           format: {
-            with: /\A[a-zA-Z0-9_-]+\z/,
-            message: 'must be a valid path'
-          }
+            with: /\A[a-zA-Z0-9_-]*[-_][a-zA-Z0-9_-]*\z/,
+            message: 'must include at least one hyphen (-) or underscore (_)'
+          },
+          if: :custom?
   validates :long_url,
           presence: true,
           uniqueness: { scope: :user_id },
@@ -29,45 +33,43 @@ class ShortUrl < ApplicationRecord
             message: 'must be a valid URL'
           }
 
-  BASE62 = '5jRkZq0aF9nM1bXc8VtYp3H6sD2uG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
+  BASE62 = 'ilTg5vJrIkZqOaFnMbXcVtYp3HsDuG7wL4oE1KzN9mQxA0BfC8dPjS2hUeR6yW'.freeze
 
   def expired?
     expires_at.present? && expires_at <= Time.current
   end
 
   def url
-    path = custom_alias.presence || short_code
+    return if slug.blank?
 
-    "#{HOST}/#{path}"
+    "#{HOST}/#{slug}"
   end
 
   private
 
   def set_short_code
-    update_column(:short_code, encode_base62(id)) if short_code.blank?
+    code = encode_base62(id)
+
+    update_columns(short_code: code, slug: custom? ? slug : code)
   end
 
   def clear_redirect_cache
-    codes = [
-      short_code,
-      custom_alias,
-      *previous_changes.fetch('short_code', []),
-      *previous_changes.fetch('custom_alias', [])
-    ].compact.uniq
-
-    codes.each do |code|
-      Rails.cache.delete("sc:#{code}")
+    [
+      slug,
+      *previous_changes.fetch('slug', [])
+    ].compact.uniq.each do |identifier|
+      Rails.cache.delete("sc:#{identifier}")
     end
   end
 
   def encode_base62(num)
-    return '0' if num == 0
+    return '0' if num.zero?
 
     base = BASE62.length
     encoded = ''
 
     while num > 0
-      encoded << BASE62[num % base]
+      encoded += BASE62[num % base]
       num /= base
     end
 
@@ -78,9 +80,15 @@ class ShortUrl < ApplicationRecord
     self.long_url = long_url.strip if long_url.present?
   end
 
-  def normalize_custom_alias
-    self.custom_alias = custom_alias.to_s.strip.downcase.presence
+  def normalize_slug
+    self.slug = slug.to_s.strip.presence
+  end
 
-    return if custom_alias.blank?
+  def set_custom_flag
+    self.custom = slug.present? if will_save_change_to_slug?
+  end
+
+  def restore_generated_slug
+    self.slug = short_code if slug.blank? && short_code.present?
   end
 end

@@ -1,3 +1,4 @@
+
 require 'test_helper'
 
 class ShortUrlTest < ActiveSupport::TestCase
@@ -61,9 +62,11 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert short_url.persisted?
     assert_not_nil short_url.short_code
     assert_match(/\A[a-zA-Z0-9]+\z/, short_url.short_code)
+    assert_equal short_url.short_code, short_url.slug
+    assert_not short_url.custom
   end
 
-  test 'should generate correct url with short code' do
+  test 'should generate correct url with generated slug' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id
@@ -71,17 +74,45 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     short_url.reload
 
-    assert_equal "http://localhost:3000/#{short_url.short_code}", short_url.url
+    assert_equal(
+      "http://localhost:3000/#{short_url.slug}",
+      short_url.url
+    )
   end
 
-  test 'should generate correct url with custom alias' do
+  test 'should generate correct url with custom slug' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
-      custom_alias: 'myalias'
+      slug: 'my-alias'
     )
 
-    assert_equal 'http://localhost:3000/myalias', short_url.url
+    short_url.reload
+
+    assert_equal 'http://localhost:3000/my-alias', short_url.url
+    assert_not_nil short_url.short_code
+    assert_equal 'my-alias', short_url.slug
+    assert short_url.custom
+  end
+
+  test 'should return nil url when slug is nil' do
+    short_url = ShortUrl.new(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: nil
+    )
+
+    assert_nil short_url.url
+  end
+
+  test 'should return nil url when slug is blank' do
+    short_url = ShortUrl.new(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: '   '
+    )
+
+    assert_nil short_url.url
   end
 
   test 'should not allow duplicate long url for same user' do
@@ -134,78 +165,198 @@ class ShortUrlTest < ActiveSupport::TestCase
     url2.reload
 
     assert_not_equal url1.short_code, url2.short_code
+    assert_not_equal url1.slug, url2.slug
   end
 
-  test 'should normalize custom alias to lowercase and strip' do
+  test 'should normalize custom slug to strip whitespace' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
-      custom_alias: '  MyAlias  '
+      slug: '  My-Alias  '
     )
 
-    assert_equal 'myalias', short_url.custom_alias
+    assert_equal 'My-Alias', short_url.slug
+    assert short_url.custom
   end
 
-  test 'custom alias becomes nil when blank after normalization' do
+  test 'should set slug with short code when blank slug is provided on creation' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
-      custom_alias: '   '
+      slug: '   '
     )
 
-    assert_nil short_url.custom_alias
+    short_url.reload
+
+    assert_not_nil short_url.short_code
+    assert_equal short_url.short_code, short_url.slug
+    assert_not short_url.custom
   end
 
-  test 'should reject custom alias with invalid characters' do
+  test 'should change existing custom alias to another custom alias' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: 'old-alias'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: 'new-alias')
+    short_url.reload
+
+    assert_equal 'new-alias', short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert short_url.custom
+  end
+
+  test 'should change generated slug to custom alias' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: 'my-alias')
+    short_url.reload
+
+    assert_equal 'my-alias', short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert short_url.custom
+  end
+
+  test 'should restore generated slug when custom alias is removed' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: 'my-alias'
+    )
+
+    short_url.reload
+    original_short_code = short_url.short_code
+
+    short_url.update!(slug: '')
+    short_url.reload
+
+    assert_equal original_short_code, short_url.slug
+    assert_equal original_short_code, short_url.short_code
+    assert_not short_url.custom
+  end
+
+  test 'should reject custom slug with invalid characters' do
     short_url = ShortUrl.new(
       long_url: 'https://example.com',
       user_id: @user.id,
-      custom_alias: 'my alias!'
+      slug: 'my@alias!'
     )
 
     assert_not short_url.save
-    assert_includes short_url.errors[:custom_alias], 'must be a valid path'
+    assert_includes short_url.errors[:slug],
+                    'must include at least one hyphen (-) or underscore (_)'
   end
 
-  test 'should allow valid custom alias characters' do
+  test 'should reject custom slug without hyphen or underscore' do
     short_url = ShortUrl.new(
       long_url: 'https://example.com',
       user_id: @user.id,
-      custom_alias: 'my_alias-123'
+      slug: 'myalias123'
+    )
+
+    assert_not short_url.valid?
+    assert_includes short_url.errors[:slug],
+                    'must include at least one hyphen (-) or underscore (_)'
+  end
+
+  test 'should allow valid custom slug characters' do
+    short_url = ShortUrl.new(
+      long_url: 'https://example.com',
+      user_id: @user.id,
+      slug: 'my-alias_123'
     )
 
     assert short_url.valid?
   end
 
-  test 'should not allow duplicate custom alias' do
+  test 'should not allow duplicate slug' do
     ShortUrl.create!(
       long_url: 'https://first.com',
       user_id: @user.id,
-      custom_alias: 'samealias'
+      slug: 'same-alias'
     )
 
     duplicate = ShortUrl.new(
       long_url: 'https://second.com',
       user_id: @user.id,
-      custom_alias: 'samealias'
+      slug: 'same-alias'
     )
 
     assert_not duplicate.save
-    assert_includes duplicate.errors[:custom_alias], 'has already been taken'
+    assert_includes duplicate.errors[:slug], 'has already been taken'
   end
 
-  test 'expired returns true when expires at is in past' do
+  test 'should set active to true by default' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://example.com',
+      user_id: @user.id
+    )
+
+    assert short_url.active
+  end
+
+  test 'active scope returns only active urls' do
+    active_url = ShortUrl.create!(
+      long_url: 'https://active.com',
+      user_id: @user.id
+    )
+
+    inactive_url = ShortUrl.create!(
+      long_url: 'https://inactive.com',
+      user_id: @user.id
+    )
+
+    inactive_url.update!(active: false)
+
+    results = ShortUrl.active
+
+    assert_includes results, active_url
+    assert_not_includes results, inactive_url
+  end
+
+  test 'inactive scope returns only inactive urls' do
+    active_url = ShortUrl.create!(
+      long_url: 'https://active.com',
+      user_id: @user.id
+    )
+
+    inactive_url = ShortUrl.create!(
+      long_url: 'https://inactive.com',
+      user_id: @user.id
+    )
+
+    inactive_url.update!(active: false)
+
+    results = ShortUrl.inactive
+
+    assert_includes results, inactive_url
+    assert_not_includes results, active_url
+  end
+
+  test 'expired returns true when expires at is in the past' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id
     )
 
     short_url.update_column(:expires_at, 1.day.ago)
+    short_url.reload
 
     assert short_url.expired?
   end
 
-  test 'expired returns false when expires at is in future' do
+  test 'expired returns false when expires at is in the future' do
     short_url = ShortUrl.create!(
       long_url: 'https://example.com',
       user_id: @user.id,
@@ -232,8 +383,8 @@ class ShortUrlTest < ActiveSupport::TestCase
 
     expired_url.update_column(:expires_at, 1.day.ago)
 
-    active_url = ShortUrl.create!(
-      long_url: 'https://active.com',
+    unexpired_url = ShortUrl.create!(
+      long_url: 'https://unexpired.com',
       user_id: @user.id,
       expires_at: 1.day.from_now
     )
@@ -241,14 +392,15 @@ class ShortUrlTest < ActiveSupport::TestCase
     results = ShortUrl.expired
 
     assert_includes results, expired_url
-    assert_not_includes results, active_url
+    assert_not_includes results, unexpired_url
   end
 
-  test 'active scope returns future and non expiring urls' do
+  test 'unexpired scope returns future and non-expiring urls' do
     expired_url = ShortUrl.create!(
       long_url: 'https://expired.com',
       user_id: @user.id
     )
+
     expired_url.update_column(:expires_at, 1.day.ago)
 
     future_url = ShortUrl.create!(
@@ -262,18 +414,18 @@ class ShortUrlTest < ActiveSupport::TestCase
       user_id: @user.id
     )
 
-    results = ShortUrl.active
+    results = ShortUrl.unexpired
 
     assert_includes results, future_url
     assert_includes results, non_expiring_url
     assert_not_includes results, expired_url
   end
 
-  test 'custom scope returns only urls with custom alias' do
+  test 'custom scope returns only custom urls' do
     custom_url = ShortUrl.create!(
       long_url: 'https://custom-scope.com',
       user_id: @user.id,
-      custom_alias: 'custom-scope-path'
+      slug: 'custom-scope-path'
     )
 
     generated_url = ShortUrl.create!(
@@ -287,11 +439,11 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert_not_includes results, generated_url
   end
 
-  test 'generated scope returns urls without custom alias' do
+  test 'generated scope returns only generated urls' do
     custom_url = ShortUrl.create!(
       long_url: 'https://custom-generated-scope.com',
       user_id: @user.id,
-      custom_alias: 'generated-scope-path'
+      slug: 'generated-custom'
     )
 
     generated_url = ShortUrl.create!(
@@ -299,16 +451,9 @@ class ShortUrlTest < ActiveSupport::TestCase
       user_id: @user.id
     )
 
-    blank_alias_url = ShortUrl.create!(
-      long_url: 'https://blank-scope.com',
-      user_id: @user.id
-    )
-    blank_alias_url.update_column(:custom_alias, '')
-
     results = ShortUrl.generated
 
     assert_includes results, generated_url
-    assert_includes results, blank_alias_url
     assert_not_includes results, custom_url
   end
 
@@ -323,30 +468,44 @@ class ShortUrlTest < ActiveSupport::TestCase
     assert_includes short_url.errors[:expires_at].first, 'must be greater than'
   end
 
-  test 'clears redirect cache for short code' do
+  test 'clears redirect cache for generated slug' do
     short_url = ShortUrl.create!(
-      long_url: 'https://cache-short-code.com',
+      long_url: 'https://cache-generated.com',
       user_id: @user.id
     )
 
     short_url.reload
 
-    Rails.cache.expects(:delete).with("sc:#{short_url.short_code}")
+    Rails.cache.expects(:delete).with("sc:#{short_url.slug}")
 
     short_url.send(:clear_redirect_cache)
   end
 
-  test 'clears redirect cache for custom alias' do
+  test 'clears redirect cache for custom slug' do
     short_url = ShortUrl.create!(
-      long_url: 'https://cache-custom-alias.com',
+      long_url: 'https://cache-custom.com',
       user_id: @user.id,
-      custom_alias: 'custom-cache'
+      slug: 'custom-cache'
     )
 
     short_url.reload
 
-    Rails.cache.expects(:delete).with("sc:#{short_url.short_code}")
     Rails.cache.expects(:delete).with('sc:custom-cache')
+
+    short_url.send(:clear_redirect_cache)
+  end
+
+  test 'clears redirect cache for both old and new slugs' do
+    short_url = ShortUrl.create!(
+      long_url: 'https://cache-update.com',
+      user_id: @user.id,
+      slug: 'old-slug'
+    )
+
+    short_url.update!(slug: 'new-slug')
+
+    Rails.cache.expects(:delete).with('sc:old-slug')
+    Rails.cache.expects(:delete).with('sc:new-slug')
 
     short_url.send(:clear_redirect_cache)
   end
