@@ -1,0 +1,81 @@
+services:
+  web:
+    build:
+      context: ./backend
+    command: ["./bin/rails", "server"]
+    env_file: .env
+    environment:
+      RAILS_ENV: production
+      PORT: 3000
+      BACKEND_DATABASE_HOST: db
+      REDIS_URL: redis://redis:6379/1
+      RAILS_MAX_THREADS: 3
+      BACKEND_DATABASE_USERNAME: ${POSTGRES_USER}
+      BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+    command: ["bundle", "exec", "sidekiq"]
+    env_file: .env
+    environment:
+      RAILS_ENV: production
+      BACKEND_DATABASE_HOST: db
+      REDIS_URL: redis://redis:6379/1
+      RAILS_MAX_THREADS: 3
+      BACKEND_DATABASE_USERNAME: ${POSTGRES_USER}
+      BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: url_shortner_production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
