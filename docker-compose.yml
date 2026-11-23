@@ -9,7 +9,7 @@ services:
       PORT: 3000
       BACKEND_DATABASE_HOST: db
       REDIS_URL: redis://redis:6379/1
-      RAILS_MAX_THREADS: 3
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-1}
       BACKEND_DATABASE_USERNAME: ${POSTGRES_USER}
       BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
@@ -24,13 +24,13 @@ services:
   worker:
     build:
       context: ./backend
-    command: ["bundle", "exec", "sidekiq"]
+    command: ["bundle", "exec", "sidekiq", "-c", "${SIDEKIQ_CONCURRENCY:-1}"]
     env_file: .env
     environment:
       RAILS_ENV: production
       BACKEND_DATABASE_HOST: db
       REDIS_URL: redis://redis:6379/1
-      RAILS_MAX_THREADS: 3
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-1}
       BACKEND_DATABASE_USERNAME: ${POSTGRES_USER}
       BACKEND_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
@@ -42,6 +42,16 @@ services:
 
   db:
     image: postgres:17-alpine
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=20
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
     env_file: .env
     environment:
       POSTGRES_DB: url_shortner_production
@@ -56,7 +66,14 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis_data:/data
     healthcheck:
