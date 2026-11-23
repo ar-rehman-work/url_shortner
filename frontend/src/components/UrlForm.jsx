@@ -1,39 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { shortenUrl, BACKEND_URL } from '../api/urls'
 
-const UrlForm = ({ isOpen, onClose, onSuccess, shortUrl }) => {
-  const [url, setUrl] = useState('')
-  const [customAlias, setCustomAlias] = useState('')
-  const [expiresAt, setExpiresAt] = useState('')
+const UrlForm = ({ onClose, onSuccess, shortUrl }) => {
+  const [url, setUrl] = useState(() => shortUrl.long_url || '')
+  const [customAlias, setCustomAlias] = useState(() => shortUrl?.custom ? shortUrl.slug || '' : '')
+  const [expiresAt, setExpiresAt] = useState(() =>
+    shortUrl?.expires_at
+      ? new Date(
+          new Date(shortUrl.expires_at).getTime() -
+          new Date(shortUrl.expires_at).getTimezoneOffset() * 60000
+        ).toISOString().slice(0, 16)
+      : ''
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
   const isEditing = Boolean(shortUrl)
-
-  useEffect(() => {
-    if (!isOpen) return
-
-    setUrl(shortUrl?.long_url || '')
-    setCustomAlias(shortUrl?.custom ? shortUrl.slug || '' : '')
-    setExpiresAt(
-      shortUrl?.expires_at
-        ? new Date(new Date(shortUrl.expires_at).getTime() - new Date(shortUrl.expires_at).getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 16)
-        : ''
-    )
-    setError('')
-  }, [isOpen, shortUrl])
-
-  const baseUrl = BACKEND_URL
 
   const previewUrl = useMemo(() => {
     const slug = customAlias.trim() || shortUrl?.slug
 
     return slug
-      ? `${baseUrl}/${slug}`
-      : `${baseUrl}/xxxxx`
-  }, [baseUrl, customAlias, shortUrl])
+      ? `${BACKEND_URL}/${slug}`
+      : `${BACKEND_URL}/xxxxx`
+  }, [customAlias, shortUrl])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -67,8 +56,6 @@ const UrlForm = ({ isOpen, onClose, onSuccess, shortUrl }) => {
       setLoading(false)
     }
   }
-
-  if (!isOpen) return null
 
   return (
     <div

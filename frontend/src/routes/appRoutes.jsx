@@ -1,5 +1,3 @@
-import { Navigate } from 'react-router-dom'
-
 import RouteHandler from '../components/RouteHandler'
 import Dashboard from '../pages/Dashboard'
 import Login from '../pages/Login'

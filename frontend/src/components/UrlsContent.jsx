@@ -65,15 +65,17 @@ const UrlsContent = () => {
         </button>
       </div>
 
-      <UrlForm
-        isOpen={isUrlModalOpen || Boolean(editingUrl)}
-        onClose={() => {
-          setIsUrlModalOpen(false)
-          setEditingUrl(null)
-        }}
-        onSuccess={editingUrl ? updateShortUrl : addShortUrl}
-        shortUrl={editingUrl}
-      />
+      {(isUrlModalOpen || Boolean(editingUrl)) && (
+        <UrlForm
+          key={editingUrl ? `edit-${editingUrl.id}` : 'new'}
+          onClose={() => {
+            setIsUrlModalOpen(false)
+            setEditingUrl(null)
+          }}
+          onSuccess={editingUrl ? updateShortUrl : addShortUrl}
+          shortUrl={editingUrl}
+        />
+      )}
 
       { shortUrl && <UrlCard shortUrl={shortUrl} /> }
 

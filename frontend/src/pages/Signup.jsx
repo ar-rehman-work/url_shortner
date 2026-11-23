@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { signup } from '../api/urls'
-import useAuth from '../hooks/useAuth'
 
 const Signup = () => {
   const navigate = useNavigate()
