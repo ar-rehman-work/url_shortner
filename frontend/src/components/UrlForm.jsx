@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { shortenUrl, BACKEND_URL } from '../api/urls'
 
 const UrlForm = ({ onClose, onSuccess, shortUrl }) => {
-  const [url, setUrl] = useState(() => shortUrl.long_url || '')
+  const [url, setUrl] = useState(() => shortUrl?.long_url || '')
   const [customAlias, setCustomAlias] = useState(() => shortUrl?.custom ? shortUrl.slug || '' : '')
   const [expiresAt, setExpiresAt] = useState(() =>
     shortUrl?.expires_at
