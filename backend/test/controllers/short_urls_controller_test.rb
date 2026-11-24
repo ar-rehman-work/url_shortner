@@ -5,7 +5,7 @@ class ShortUrlsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   def setup
-    ShortUrl.const_set(:HOST, 'http://localhost:3000') unless ShortUrl.const_defined?(:HOST)
+    ENV['APP_HOST'] = 'http://localhost:3000'
 
     Rails.cache.clear
     REDIS.clear
