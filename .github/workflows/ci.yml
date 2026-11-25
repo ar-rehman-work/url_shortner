@@ -98,3 +98,94 @@ jobs:
           REDIS_URL: redis://localhost:6379/1
           SECRET_KEY_BASE: test-secret-key-base-for-ci-only-not-production
         run: bin/rails db:test:prepare test
+
+  deploy:
+    name: Deploy to Oracle VM
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .
+    needs: [scan_ruby, lint, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/deployment/free-hosting'
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build production Docker image
+        run: |
+          docker build --pull -t url_shortner-web:latest ./backend
+          docker save url_shortner-web:latest | gzip > url_shortner-web.tar.gz
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Transfer Docker image to Oracle VM
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            url_shortner-web.tar.gz \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/url_shortner-web.tar.gz"
+
+      - name: Deploy application
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+
+          cd /home/ubuntu/url_shortner
+
+          docker load -i /tmp/url_shortner-web.tar.gz
+
+          # Update Rails server and apply pending database migrations.
+          docker compose up -d --no-deps web
+
+          # Refresh Nginx DNS resolution for the new web container.
+          docker compose restart nginx
+
+          # Verify the application before restarting Sidekiq.
+          for attempt in $(seq 1 30); do
+            if curl -fsS https://129.225.87.239/api/v1/up >/dev/null; then
+              echo "Backend health check passed."
+              break
+            fi
+
+            if [ "$attempt" -eq 30 ]; then
+              echo "Backend health check failed."
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          # Update Sidekiq only after the web application is healthy.
+          docker compose up -d --no-deps worker
+
+          rm -f /tmp/url_shortner-web.tar.gz
+
+          echo "Deployment completed successfully."
+          REMOTE
+
+      - name: Clean up SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts
