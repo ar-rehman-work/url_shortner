@@ -155,6 +155,9 @@ jobs:
 
           cd /home/ubuntu/url_shortner
 
+          # Update deployment configuration from GitHub.
+          git pull --ff-only origin deployment/free-hosting
+
           docker load -i /tmp/url_shortner-web.tar.gz
 
           # Update Rails server and apply pending database migrations.
