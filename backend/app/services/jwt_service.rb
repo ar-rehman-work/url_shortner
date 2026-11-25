@@ -1,5 +1,5 @@
 class JwtService
-  SECRET = Rails.application.credentials.secret_key_base
+  SECRET = ENV.fetch('SECRET_KEY_BASE') { Rails.application.credentials.secret_key_base }
 
   def self.encode(payload)
     JWT.encode(payload, SECRET)
