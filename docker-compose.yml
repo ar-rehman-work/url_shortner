@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   web:
     image: url_shortner-web:latest
@@ -19,6 +25,7 @@ services:
     expose:
       - "3000"
     restart: unless-stopped
+    logging: *default-logging
 
   worker:
     image: url_shortner-web:latest
@@ -37,6 +44,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
 
   db:
     image: postgres:17-alpine
@@ -63,6 +71,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
@@ -82,6 +91,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging: *default-logging
 
   nginx:
     image: nginx:alpine
@@ -95,6 +105,7 @@ services:
     depends_on:
       - web
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   postgres_data:
