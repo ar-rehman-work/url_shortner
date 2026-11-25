@@ -115,7 +115,7 @@ class ShortUrlsController < ApplicationController
   end
 
   def check_long_url
-    return render json: { error: 'Long url must be provided' }, status: :bad_request if short_url_params[:long_url].blank?
+    render json: { error: 'Long url must be provided' }, status: :bad_request if short_url_params[:long_url].blank?
   end
 
   def handle_redirect(redirect_data)
