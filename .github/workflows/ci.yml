@@ -168,7 +168,7 @@ jobs:
 
           # Verify the application before restarting Sidekiq.
           for attempt in $(seq 1 30); do
-            if curl -fsS https://129.225.87.239/api/v1/up >/dev/null; then
+            if curl -fsS "${{ secrets.DEPLOY_HEALTH_URL }}" >/dev/null; then
               echo "Backend health check passed."
               break
             fi
