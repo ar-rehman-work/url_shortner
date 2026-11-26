@@ -184,6 +184,9 @@ jobs:
           # Update Sidekiq only after the web application is healthy.
           docker compose up -d --no-deps worker
 
+          # Back up the successfully deployed Docker image to OCI.
+          ./backup-image.sh
+
           rm -f /tmp/url_shortner-web.tar.gz
 
           echo "Deployment completed successfully."
